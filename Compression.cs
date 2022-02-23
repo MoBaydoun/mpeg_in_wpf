@@ -19,41 +19,108 @@ namespace ImageCompression
     class Compression
     {
 
-        public Pixel[,] pixels { get; private set; }
+        public RGB[,]? pixels { get; private set; }
+        public int stride { get; private set; }
         public Compression(Image img)
         {
             var src = img.Source as BitmapSource ?? throw new ArgumentNullException("Image does not exist");
             var image = ConvertData(src);
-            pixels = Pixel.DataToPixels(image);
-            var convert = ConvertedPixel.ConvertPixels(pixels);
-            var changed = ConvertBack(ConvertedPixel.PixelsToData(convert));
+            //Bytes to pixels
+            pixels = RGB.MatrixBufferToRGB(image);
+            //RGB to YCbCr
+            YCBCR[,] YCbCrPixels = YCBCR.RGBMatrixToYCBCRMatrix(pixels);
+            //Seperate channels
+            float[,] y;
+            float[,] cb;
+            float[,] cr;
+            YCBCR.DeconstructYCBCR(YCbCrPixels, out y, out cb, out cr);
+            //Subsample cb and cr
+            cb = SubSample(cb);
+            cr = SubSample(cr);
+            //Create 8x8s
+            var ySubsets = CreateSubsets(y);
+            var cbSubsets = CreateSubsets(cb);
+            var crSubsets = CreateSubsets(cr);
+            //DCT 8x8s
+            var dctY = DCTRunnerSquared(ySubsets);
+            var dctCb = DCTRunnerSquared(cbSubsets);
+            var dctCr = DCTRunnerSquared(crSubsets);
+            //Quantize
+            QuantizeY(ref dctY);
+            QuantizeC(ref dctCb);
+            QuantizeC(ref dctCr);
+
+
+
             WriteableBitmap bmp = new(img.Source as BitmapSource);
-            bmp.WritePixels(
+            /*bmp.WritePixels(
                 new System.Windows.Int32Rect(0, 0, src.PixelWidth, src.PixelHeight),
                 changed,
                 src.PixelWidth * src.Format.BitsPerPixel / 8,
-                0);
+                0);*/
             img.Source = bmp;
         }
 
+        private void QuantizeY(ref List<List<float[,]>> y)
+        {
+            for (int i = 0; i < y.Count; ++i)
+            {
+                for (int j = 0; j < y[i].Count; ++j)
+                {
+                    y[i][j] = Helper.QuantizeLuminosity(y[i][j]);
+                }
+            }
+        }
 
-        private List<float[,]> CreateSubsets(float[,] img)
+        private void QuantizeC(ref List<List<float[,]>> c)
+        {
+            for (int i = 0; i < c.Count; ++i)
+            {
+                for (int j = 0; j < c[i].Count; ++j)
+                {
+                    c[i][j] = Helper.QuantizeChrominance(c[i][j]);
+                }
+            }
+        }
+
+        public static List<List<float[,]>> CreateSubsets(float[,] img)
         {
             int width = img.GetLength(0);
             int height = img.GetLength(1);
-            List<float[,]> subsets = new();
+            List<List<float[,]>> subsets = new(width / Constants.MATRIX_SIZE);
             for (int i = 0; i < width; i += Constants.MATRIX_SIZE)
             {
+                subsets.Add(new List<float[,]>());
                 for (int j = 0; j < height; j += Constants.MATRIX_SIZE)
                 {
-                    subsets.Add(PadSubset(GetSubset(img, i, j)));
+                    subsets[i / Constants.MATRIX_SIZE].Add(PadSubset(GetSubset(img, i, j)));
                 }
             }
             return subsets;
         }
 
+        public static float[,] ReassembleSubsets(List<List<float[,]>> subsets)
+        {
+            float[,] img = new float[subsets.Count * Constants.MATRIX_SIZE, subsets[0].Count * Constants.MATRIX_SIZE];
+            for (int i = 0; i < subsets.Count; ++i)
+            {
+                for (int j = 0; j < subsets[i].Count; ++j)
+                {
+                    for (int k = 0; k < subsets[i][j].GetLength(0); ++k)
+                    {
+                        for (int h = 0; h < subsets[i][j].GetLength(1); ++h)
+                        {
+                            img[k * Constants.MATRIX_SIZE + i, h * Constants.MATRIX_SIZE + j] = subsets[i][j][k, h];
+                        }
+                    }
+                }
+            }
+            return img;
+        }
+
         private static float[,] PadSubset(float[,] faulty)
         {
+            if (faulty.GetLength(0) == Constants.MATRIX_SIZE && faulty.GetLength(1) == Constants.MATRIX_SIZE) return faulty;
             float[,] subset = new float[Constants.MATRIX_SIZE, Constants.MATRIX_SIZE];
             for (int i = 0; i < faulty.GetLength(0); ++i)
             {
@@ -83,7 +150,17 @@ namespace ImageCompression
             return subset;
         }
 
-        public List<float[,]> DCTRunner(List<float[,]> img)
+        private List<List<float[,]>> DCTRunnerSquared(List<List<float[,]>> img)
+        {
+            List<List<float[,]>> returnable = new();
+            foreach (var subset in img)
+            {
+                returnable.Add(DCTRunner(subset));
+            }
+            return returnable;
+        }
+
+        private List<float[,]> DCTRunner(List<float[,]> img)
         {
             int tasks = img.Count() / Constants.MAX_THREADS;
             List<float[,]> result = new();
@@ -177,54 +254,58 @@ namespace ImageCompression
             return num == 0 ? (float)(1 / Math.Sqrt(2)) : 1;
         }
 
-        private float[,] SubSample(float[,] image)
+        /*public static YCBCR[,] SubSample(YCBCR[,] image)
         {
-            float[,] result = new float[image.GetLength(0) / 2, image.GetLength(1) / 2];
-            for (int r = 0; r < image.GetLength(0); r += 2)
+            YCBCR[,] result = new YCBCR[image.GetLength(0), image.GetLength(1)];
+            for (int r = 0; r < image.GetLength(0); ++r)
             {
-                for (int c = 0; c < image.GetLength(1); c += 2)
+                for (int c = 0; c < image.GetLength(1); ++c)
                 {
-                    result[r / 2, c / 2] = image[r, c];
+                    result[r, c] = new(image[r, c]);
+                    if (c % 2 != 0 && r % 2 == 0)
+                    {
+                        result[r, c].Cb = image[r, c - 1].Cb;
+                        result[r, c].Cr = image[r, c - 1].Cr;
+                    }
+                    else if (r % 2 != 0)
+                    {
+                        result[r, c].Cb = image[r - 1, c].Cb;
+                        result[r, c].Cr = image[r - 1, c].Cr;
+                    }
                 }
             }
             return result;
-        }
+        }*/
 
-        private float[,] SubSampleV2(float[,] image)
+        public static float[,] SubSample(float[,] pComponent)
         {
-            float[,] result = new float[image.GetLength(0), image.GetLength(1)];
-            for (int r = 0; r < image.GetLength(0); r += 2)
+            float[,] component = new float[pComponent.GetLength(0) / 2, pComponent.GetLength(1) / 2];
+            for (int i = 0; i < pComponent.GetLength(0) - 1; i += 2)
             {
-                for (int c = 0; c < image.GetLength(1); c += 2)
+                for (int j = 0; j < pComponent.GetLength(1) - 1; j += 2)
                 {
-                    result[r, c] = image[r, c];
-                    result[r, c + 1] = image[r, c];
-                    result[r + 1, c] = image[r, c];
-                    result[r + 1, c + 1] = image[r, c];
+                    component[i / 2, j / 2] = pComponent[i, j];
                 }
             }
-            return result;
+            return component;
         }
 
-        private float[,] ConvertData(BitmapSource src)
+        public static float[,] ConvertData(BitmapSource src)
         {
             int stride = src.PixelWidth * src.Format.BitsPerPixel / 8;
             int total = src.PixelWidth * src.PixelHeight * src.Format.BitsPerPixel / 8;
             int stridenums = total / stride;
-
             byte[] buffer = new byte[total];
             src.CopyPixels(buffer, stride, 0);
-            Trace.WriteLine(buffer.Length);
-            float[,] data = new float[stride, stridenums];
+            float[,] data = new float[stridenums, stride];
 
-            for (int y = 0; y < stridenums; ++y)
+            for (int y = 0; y < stride; ++y)
             {
-                for (int x = 0; x < stride; ++x)
+                for (int x = 0; x < stridenums; ++x)
                 {
-                    data[x, y] = buffer[y * stride + x];
+                    data[x, y] = buffer[x * stride + y];
                 }
             }
-
             return data;
         }
 
@@ -243,7 +324,7 @@ namespace ImageCompression
 
         private static float FloatRound(float f)
         {
-            float r = f < 0 ? MathF.Truncate(f - 0.5f) : MathF.Truncate(f + 0.5f);
+            float r = f < 0 ? (int)f - 0.5f : (int)f + 0.5f;
             return r == -0 ? 0 : r;
         }
     }

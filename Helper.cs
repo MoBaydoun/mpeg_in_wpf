@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Diagnostics;
 
 namespace ImageCompression
@@ -23,6 +19,70 @@ namespace ImageCompression
             }
             s = s.Remove(s.Length - 1);
             Trace.WriteLine(s);
+        }
+
+        public static void PrintArray<T>(T[] array)
+        {
+            string s = "{";
+            for (int i = 0; i < array.Length; ++i)
+            {
+                s += $"{array[i]},";
+            }
+            s = s.Remove(s.Length - 2);
+            s += "}";
+            Trace.WriteLine(s);
+        }
+
+        public static float[,] ConvertByteMatrixToFloat(byte[,] arr)
+        {
+            float[,] ret = new float[arr.GetLength(0), arr.GetLength(1)];
+            for (int i = 0; i < arr.GetLength(0); ++i)
+            {
+                for (int j = 0; j < arr.GetLength(1); ++j)
+                {
+                    ret[i, j] = arr[i, j];
+                }
+            }
+            return ret;
+        }
+
+        public static byte[,] ConvertFloatMatrixToByte(float[,] arr)
+        {
+            byte[,] ret = new byte[arr.GetLength(0), arr.GetLength(1)];
+            for (int i = 0; i < arr.GetLength(0); ++i)
+            {
+                for (int j = 0; j < arr.GetLength(1); ++j)
+                {
+                    ret[i, j] = (byte)arr[i, j];
+                }
+            }
+            return ret;
+        }
+
+        public static float[,] QuantizeChrominance(float[,] arr)
+        {
+            float[,] ret = new float[arr.GetLength(0), arr.GetLength(1)];
+            for (int i = 0; i < arr.GetLength(0); ++i)
+            {
+                for (int j = 0; j < arr.GetLength(1); ++j)
+                {
+                    ret[i, j] = MathF.Round(arr[i, j] / Constants.Q_CHROMINANCE[i, j]);
+                }
+            }
+            return ret;
+        }
+
+        public static float[,] QuantizeLuminosity(float[,] arr)
+        {
+            float[,] ret = new float[arr.GetLength(0), arr.GetLength(1)];
+            for (int i = 0; i < arr.GetLength(0); ++i)
+            {
+                for (int j = 0; j < arr.GetLength(1); ++j)
+                {
+                    ret[i, j] = MathF.Round(arr[i, j] / Constants.Q_LUMINOSITY[i, j]);
+                }
+            }
+            return ret;
         }
 
         /*public static int[,] KernelProcessing(int[,] image, int[,] kernel)
