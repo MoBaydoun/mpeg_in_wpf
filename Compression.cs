@@ -8,25 +8,17 @@ using System.Threading.Tasks;
 
 namespace ImageCompression
 {
-
-    /// <summary>
-    /// DCT:
-    /// H(u, v) = C(u) || C(v) * 2 / N loop rows loop columns cos(pi(2*x+1)/2N) * cos(pi(2*y+1)/2N) * h(x, y)
-    /// what is C???
-    /// C = if arg is anything other than 0, C = 1, otherwise C = 1/root2
-    /// </summary>
-
     class Compression
     {
 
-        public RGB[,]? pixels { get; private set; }
         public int stride { get; private set; }
         public Compression(Image img)
         {
+            //Construct stuff from source
             var src = img.Source as BitmapSource ?? throw new ArgumentNullException("Image does not exist");
             var image = ConvertData(src);
-            //Bytes to pixels
-            pixels = RGB.MatrixBufferToRGB(image);
+            //Bytes to RGB
+            var pixels = RGB.MatrixBufferToRGB(image);
             //RGB to YCbCr
             YCBCR[,] YCbCrPixels = YCBCR.RGBMatrixToYCBCRMatrix(pixels);
             //Seperate channels
@@ -37,28 +29,115 @@ namespace ImageCompression
             //Subsample cb and cr
             cb = SubSample(cb);
             cr = SubSample(cr);
+            //Pad
+            int yRow, yCol, cbRow, cbCol, crRow, crCol;
+            y = Prepad(y, out yRow, out yCol);
+            cb = Prepad(cb, out cbRow, out cbCol);
+            cr = Prepad(cr, out crRow, out crCol);
             //Create 8x8s
             var ySubsets = CreateSubsets(y);
             var cbSubsets = CreateSubsets(cb);
             var crSubsets = CreateSubsets(cr);
             //DCT 8x8s
-            var dctY = DCTRunnerSquared(ySubsets);
+            /*var dctY = DCTRunnerSquared(ySubsets);
             var dctCb = DCTRunnerSquared(cbSubsets);
-            var dctCr = DCTRunnerSquared(crSubsets);
+            var dctCr = DCTRunnerSquared(crSubsets);*/
             //Quantize
-            QuantizeY(ref dctY);
-            QuantizeC(ref dctCb);
-            QuantizeC(ref dctCr);
-
-
-
+            QuantizeY(ref ySubsets);
+            QuantizeC(ref cbSubsets);
+            QuantizeC(ref crSubsets);
+            //DeQuantize
+            DeQuantizeY(ref ySubsets);
+            DeQuantizeC(ref cbSubsets);
+            DeQuantizeC(ref crSubsets);
+            //IDCT 8x8s
+            /*dctY = IDCTRunnerSquared(dctY);
+            dctCb = IDCTRunnerSquared(dctCb);
+            dctCr = IDCTRunnerSquared(dctCr);*/
+            //Reassemble subsets
+            y = ReassembleSubsets(ySubsets);
+            cb = ReassembleSubsets(cbSubsets);
+            cr = ReassembleSubsets(crSubsets);
+            /*y = ReassembleSubsets(dctY);
+            cb = ReassembleSubsets(dctCb);
+            cr = ReassembleSubsets(dctCr);*/
+            //Unpad
+            y = Unpad(y, yRow, yCol);
+            cb = Unpad(cb, cbRow, cbCol);
+            cr = Unpad(cr, crRow, crCol);
+            //Revert
+            cb = Unsample(cb);
+            cr = Unsample(cr);
+            //Combine pixels again
+            YCbCrPixels = YCBCR.ReconstructYCBCR(y, cb, cr);
+            //Convert pixels back to RGB
+            pixels = RGB.YCBCRtoRGB(YCbCrPixels);
+            //Write back to bitmap
+            var buffer = RGB.RGBtoBuffer(pixels);
             WriteableBitmap bmp = new(img.Source as BitmapSource);
-            /*bmp.WritePixels(
+            bmp.WritePixels(
                 new System.Windows.Int32Rect(0, 0, src.PixelWidth, src.PixelHeight),
-                changed,
+                buffer,
                 src.PixelWidth * src.Format.BitsPerPixel / 8,
-                0);*/
+                0);
             img.Source = bmp;
+        }
+
+        public static float[,] Unsample(float[,] arr)
+        {
+            float[,] ret = new float[arr.GetLength(0) * 2, arr.GetLength(1) * 2];
+            for (int i = 0; i < ret.GetLength(0) - 1; i += 2)
+            {
+                for (int j = 0; j < ret.GetLength(1) - 1; j+= 2)
+                {
+                    ret[i, j] = arr[i / 2, j / 2];
+                    ret[i + 1, j + 1] = arr[i / 2, j / 2];
+                    ret[i, j + 1] = arr[i / 2, j / 2];
+                    ret[i + 1, j] = arr[i / 2, j / 2];
+                }
+            }
+            return ret;
+        }
+
+        public static float[,] Unpad(float[,] arr, int rowDivis, int colDivis)
+        {
+            if (rowDivis == 0 && colDivis == 0)
+            {
+                Trace.WriteLine("im a funcking moron");
+                return arr;
+            }
+            float[,] ret = new float[arr.GetLength(0) - rowDivis, arr.GetLength(1) - colDivis];
+            for (int i = 0; i < ret.GetLength(0); ++i)
+            {
+                for (int j = 0; j < ret.GetLength(1); ++j)
+                {
+                    ret[i, j] = arr[i, j];
+                }
+            }
+            return ret;
+        }
+
+        public static float[,] Prepad(float[,] arr, out int rowDivis, out int colDivis)
+        {
+            rowDivis = 0;
+            colDivis = 0;
+            while ((arr.GetLength(0) + rowDivis) % Constants.MATRIX_SIZE != 0)
+            {
+                ++rowDivis;
+            }
+            while ((arr.GetLength(1) + colDivis) % Constants.MATRIX_SIZE != 0)
+            {
+                ++colDivis;
+            }
+            float[,] ret = new float[arr.GetLength(0) + rowDivis, arr.GetLength(1) + colDivis];
+            for (int i = 0; i < arr.GetLength(0); ++i)
+            {
+                for (int j = 0; j < arr.GetLength(1); ++j)
+                {
+                    ret[i, j] = arr[i, j];
+                }
+            }
+            return ret;
         }
 
         private void QuantizeY(ref List<List<float[,]>> y)
@@ -83,6 +162,28 @@ namespace ImageCompression
             }
         }
 
+        private void DeQuantizeY(ref List<List<float[,]>> y)
+        {
+            for (int i = 0; i < y.Count; ++i)
+            {
+                for (int j = 0; j < y[i].Count; ++j)
+                {
+                    y[i][j] = Helper.DeQuantizeLuminosity(y[i][j]);
+                }
+            }
+        }
+
+        private void DeQuantizeC(ref List<List<float[,]>> c)
+        {
+            for (int i = 0; i < c.Count; ++i)
+            {
+                for (int j = 0; j < c[i].Count; ++j)
+                {
+                    c[i][j] = Helper.DeQuantizeChrominance(c[i][j]);
+                }
+            }
+        }
+
         public static List<List<float[,]>> CreateSubsets(float[,] img)
         {
             int width = img.GetLength(0);
@@ -93,7 +194,7 @@ namespace ImageCompression
                 subsets.Add(new List<float[,]>());
                 for (int j = 0; j < height; j += Constants.MATRIX_SIZE)
                 {
-                    subsets[i / Constants.MATRIX_SIZE].Add(PadSubset(GetSubset(img, i, j)));
+                    subsets[i / Constants.MATRIX_SIZE].Add(GetSubset(img, i, j));
                 }
             }
             return subsets;
@@ -110,7 +211,7 @@ namespace ImageCompression
                     {
                         for (int h = 0; h < subsets[i][j].GetLength(1); ++h)
                         {
-                            img[k * Constants.MATRIX_SIZE + i, h * Constants.MATRIX_SIZE + j] = subsets[i][j][k, h];
+                            img[i * Constants.MATRIX_SIZE + k, j * Constants.MATRIX_SIZE + h] = subsets[i][j][k, h];
                         }
                     }
                 }
@@ -152,11 +253,13 @@ namespace ImageCompression
 
         private List<List<float[,]>> DCTRunnerSquared(List<List<float[,]>> img)
         {
+            Trace.WriteLine("DCT Start");
             List<List<float[,]>> returnable = new();
             foreach (var subset in img)
             {
                 returnable.Add(DCTRunner(subset));
             }
+            Trace.WriteLine("DCT End");
             return returnable;
         }
 
@@ -165,8 +268,6 @@ namespace ImageCompression
             int tasks = img.Count() / Constants.MAX_THREADS;
             List<float[,]> result = new();
             List<Task<List<float[,]>>> threads = new();
-            Stopwatch w = new();
-            w.Start();
             for (int t = 0; t < Constants.MAX_THREADS; ++t)
             {
                 threads.Add(Task.Factory.StartNew(() =>
@@ -191,8 +292,50 @@ namespace ImageCompression
                 }
                 if (t == Constants.MAX_THREADS - 1) break;
             }
-            w.Stop();
-            Trace.WriteLine($"Threaded finished: {w.ElapsedMilliseconds}ms");
+            return result;
+        }
+
+        private List<List<float[,]>> IDCTRunnerSquared(List<List<float[,]>> img)
+        {
+            Trace.WriteLine("IDCT Start");
+            List<List<float[,]>> returnable = new();
+            foreach (var subset in img)
+            {
+                returnable.Add(IDCTRunner(subset));
+            }
+            Trace.WriteLine("IDCT End");
+            return returnable;
+        }
+
+        private List<float[,]> IDCTRunner(List<float[,]> img)
+        {
+            int tasks = img.Count() / Constants.MAX_THREADS;
+            List<float[,]> result = new();
+            List<Task<List<float[,]>>> threads = new();
+            for (int t = 0; t < Constants.MAX_THREADS; ++t)
+            {
+                threads.Add(Task.Factory.StartNew(() =>
+                {
+                    List<float[,]> returnable = new();
+                    for (int i = 0; i < tasks; ++i)
+                    {
+                        returnable.Add(InverseDCT(img[t * tasks + i]));
+                        if (i == tasks - 1) break;
+                    }
+                    return returnable;
+                }));
+                if (t == Constants.MAX_THREADS - 1) break;
+            }
+            Task.WaitAll(threads.ToArray());
+            for (int t = 0; t < Constants.MAX_THREADS; ++t)
+            {
+                for (int i = 0; i < threads[t].Result.Count(); ++i)
+                {
+                    result.Add(threads[t].Result[i]);
+                    if (i == threads[t].Result.Count() - 1) break;
+                }
+                if (t == Constants.MAX_THREADS - 1) break;
+            }
             return result;
         }
 

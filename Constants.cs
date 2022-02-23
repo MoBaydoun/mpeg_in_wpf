@@ -4,7 +4,7 @@ namespace ImageCompression
 {
     public static class Constants
     {
-        public const int MAX_THREADS = 10;
+        public const int MAX_THREADS = 5;
         public const int MATRIX_SIZE = 8;
         public const int IMAGE_SIZE = 400;
         public static readonly Vector3 LUMINOSITY = new(0.299f, 0.587f, 0.114f);

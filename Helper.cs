@@ -85,6 +85,32 @@ namespace ImageCompression
             return ret;
         }
 
+        public static float[,] DeQuantizeChrominance(float[,] arr)
+        {
+            float[,] ret = new float[arr.GetLength(0), arr.GetLength(1)];
+            for (int i = 0; i < arr.GetLength(0); ++i)
+            {
+                for (int j = 0; j < arr.GetLength(1); ++j)
+                {
+                    ret[i, j] = MathF.Round(arr[i, j] * Constants.Q_CHROMINANCE[i, j]);
+                }
+            }
+            return ret;
+        }
+
+        public static float[,] DeQuantizeLuminosity(float[,] arr)
+        {
+            float[,] ret = new float[arr.GetLength(0), arr.GetLength(1)];
+            for (int i = 0; i < arr.GetLength(0); ++i)
+            {
+                for (int j = 0; j < arr.GetLength(1); ++j)
+                {
+                    ret[i, j] = MathF.Round(arr[i, j] * Constants.Q_LUMINOSITY[i, j]);
+                }
+            }
+            return ret;
+        }
+
         /*public static int[,] KernelProcessing(int[,] image, int[,] kernel)
         {
             int[,] result = new T[image.GetLength(0), image.GetLength(1)];

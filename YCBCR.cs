@@ -119,5 +119,18 @@ namespace ImageCompression
                 }
             }
         }
+
+        public static YCBCR[,] ReconstructYCBCR(float[,] y, float[,] cb, float[,] cr)
+        {
+            YCBCR[,] pixels = new YCBCR[y.GetLength(0), y.GetLength(1)];
+            for (int i = 0; i < pixels.GetLength(0); ++i)
+            {
+                for (int j = 0; j < pixels.GetLength(1); ++j)
+                {
+                    pixels[i, j] = new YCBCR(y[i, j], cb[i, j], cr[i, j]);
+                }
+            }
+            return pixels;
+        }
     }
 }
