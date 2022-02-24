@@ -10,8 +10,6 @@ namespace ImageCompression
 {
     class Compression
     {
-
-        public int stride { get; private set; }
         public Compression(Image img)
         {
             //Construct stuff from source
@@ -29,6 +27,9 @@ namespace ImageCompression
             //Subsample cb and cr
             cb = SubSample(cb);
             cr = SubSample(cr);
+            var dennisY = y;
+            var dennisCb = cb;
+            var dennisCr = cr;
             //Pad
             int yRow, yCol, cbRow, cbCol, crRow, crCol;
             y = Prepad(y, out yRow, out yCol);
@@ -73,7 +74,8 @@ namespace ImageCompression
             //Convert pixels back to RGB
             pixels = RGB.YCBCRtoRGB(YCbCrPixels);
             //Write back to bitmap
-            var buffer = RGB.RGBtoBuffer(pixels);
+            var buffer2d = RGB.RGBtoBuffer(pixels);
+            var buffer = ConvertBack(buffer2d);
             WriteableBitmap bmp = new(img.Source as BitmapSource);
             bmp.WritePixels(
                 new System.Windows.Int32Rect(0, 0, src.PixelWidth, src.PixelHeight),
@@ -81,6 +83,7 @@ namespace ImageCompression
                 src.PixelWidth * src.Format.BitsPerPixel / 8,
                 0);
             img.Source = bmp;
+            GC.Collect();
         }
 
         public static float[,] Unsample(float[,] arr)
@@ -88,7 +91,7 @@ namespace ImageCompression
             float[,] ret = new float[arr.GetLength(0) * 2, arr.GetLength(1) * 2];
             for (int i = 0; i < ret.GetLength(0) - 1; i += 2)
             {
-                for (int j = 0; j < ret.GetLength(1) - 1; j+= 2)
+                for (int j = 0; j < ret.GetLength(1) - 1; j += 2)
                 {
                     ret[i, j] = arr[i / 2, j / 2];
                     ret[i + 1, j + 1] = arr[i / 2, j / 2];

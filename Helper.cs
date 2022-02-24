@@ -53,7 +53,7 @@ namespace ImageCompression
             {
                 for (int j = 0; j < arr.GetLength(1); ++j)
                 {
-                    ret[i, j] = (byte)arr[i, j];
+                    ret[i, j] = Math.Clamp((byte)arr[i, j], byte.MinValue, byte.MaxValue);
                 }
             }
             return ret;
