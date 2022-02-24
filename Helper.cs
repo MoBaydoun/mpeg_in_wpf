@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 
 namespace ImageCompression
@@ -59,27 +60,27 @@ namespace ImageCompression
             return ret;
         }
 
-        public static float[,] QuantizeChrominance(float[,] arr)
+        public static byte[,] QuantizeChrominance(float[,] arr)
         {
-            float[,] ret = new float[arr.GetLength(0), arr.GetLength(1)];
+            byte[,] ret = new byte[arr.GetLength(0), arr.GetLength(1)];
             for (int i = 0; i < arr.GetLength(0); ++i)
             {
                 for (int j = 0; j < arr.GetLength(1); ++j)
                 {
-                    ret[i, j] = MathF.Round(arr[i, j] / Constants.Q_CHROMINANCE[i, j]);
+                    ret[i, j] = Math.Clamp((byte)MathF.Round(arr[i, j] / Constants.Q_CHROMINANCE[i, j]), byte.MinValue, byte.MaxValue);
                 }
             }
             return ret;
         }
 
-        public static float[,] QuantizeLuminosity(float[,] arr)
+        public static byte[,] QuantizeLuminosity(float[,] arr)
         {
-            float[,] ret = new float[arr.GetLength(0), arr.GetLength(1)];
+            byte[,] ret = new byte[arr.GetLength(0), arr.GetLength(1)];
             for (int i = 0; i < arr.GetLength(0); ++i)
             {
                 for (int j = 0; j < arr.GetLength(1); ++j)
                 {
-                    ret[i, j] = MathF.Round(arr[i, j] / Constants.Q_LUMINOSITY[i, j]);
+                    ret[i, j] = Math.Clamp((byte)MathF.Round(arr[i, j] / Constants.Q_LUMINOSITY[i, j]), byte.MinValue, byte.MaxValue);
                 }
             }
             return ret;
@@ -109,6 +110,131 @@ namespace ImageCompression
                 }
             }
             return ret;
+        }
+
+        public static T[] Mogarithm<T>(T[,] subset)
+        {
+            List<T> result = new();
+            for (int i = 0; i < subset.GetLength(0) * 2; ++i)
+            {
+                List<T> temp = new();
+                int index = i > subset.GetLength(0) - 1 ? subset.GetLength(0) - 1 : i;
+                for (int j = index; j >= 0; --j)
+                {
+                    if (i - j >= subset.GetLength(0)) continue;
+                    temp.Add(subset[j, i - j]);
+                }
+                if (i % 2 == 0) temp.Reverse();
+                result.AddRange(temp);
+            }
+            return result.ToArray();
+        }
+
+        public static T[] ConvertBack<T>(T[,] data)
+        {
+            List<T> bytes = new();
+            for (int i = 0; i < data.GetLength(0); ++i)
+            {
+                for (int j = 0; j < data.GetLength(1); ++j)
+                {
+                    bytes.Add(data[i, j]);
+                }
+            }
+            return bytes.ToArray();
+        }
+
+        public static List<List<T[,]>> CreateSubsets<T>(T[,] img)
+        {
+            int width = img.GetLength(0);
+            int height = img.GetLength(1);
+            List<List<T[,]>> subsets = new(width / Constants.MATRIX_SIZE);
+            for (int i = 0; i < width; i += Constants.MATRIX_SIZE)
+            {
+                subsets.Add(new List<T[,]>());
+                for (int j = 0; j < height; j += Constants.MATRIX_SIZE)
+                {
+                    subsets[i / Constants.MATRIX_SIZE].Add(GetSubset(img, i, j));
+                }
+            }
+            return subsets;
+        }
+
+        private static T[,] GetSubset<T>(T[,] img, int offsetX, int offsetY)
+        {
+            T[,] subset = new T[Constants.MATRIX_SIZE, Constants.MATRIX_SIZE];
+            for (int i = 0; i < subset.GetLength(0); ++i)
+            {
+                for (int j = 0; j < subset.GetLength(1); ++j)
+                {
+                    int adjusterX = img.GetLength(0) - offsetX + i;
+                    int adjusterY = img.GetLength(1) - offsetY + j;
+                    subset[i, j] = img[
+                        offsetX + i < img.GetLength(0) ? offsetX + i : img.GetLength(0) - adjusterX,
+                        offsetY + j < img.GetLength(1) ? offsetY + j : img.GetLength(1) - adjusterY
+                        ];
+                }
+            }
+            return subset;
+        }
+
+        public static T[,] ReassembleSubsets<T>(List<List<T[,]>> subsets)
+        {
+            T[,] img = new T[subsets.Count * Constants.MATRIX_SIZE, subsets[0].Count * Constants.MATRIX_SIZE];
+            for (int i = 0; i < subsets.Count; ++i)
+            {
+                for (int j = 0; j < subsets[i].Count; ++j)
+                {
+                    for (int k = 0; k < subsets[i][j].GetLength(0); ++k)
+                    {
+                        for (int h = 0; h < subsets[i][j].GetLength(1); ++h)
+                        {
+                            img[i * Constants.MATRIX_SIZE + k, j * Constants.MATRIX_SIZE + h] = subsets[i][j][k, h];
+                        }
+                    }
+                }
+            }
+            return img;
+        }
+
+        public static byte[] MRLE(byte[] b)
+        {
+            List<byte> compressed = new List<byte>();
+            int n = b.Length;
+            for (int i = 0; i < n; ++i)
+            {
+                int count = 1;
+                while (i < n - 1 && b[i] == b[i + 1] && count < byte.MaxValue)
+                {
+                    ++count;
+                    ++i;
+                }
+                if (count > 2 || b[i] == Constants.KEY)
+                {
+                    compressed.Add(Constants.KEY);
+                    compressed.Add((byte)count);
+                    compressed.Add(b[i]);
+                }
+                else
+                {
+                    for (int j = 0; j < count; ++j)
+                    {
+                        compressed.Add(b[i]);
+                    }
+                }
+            }
+            return compressed.ToArray();
+        }
+
+        public static byte[] DifferentialEncoding(byte[] b)
+        {
+            List<byte> diff = new List<byte>();
+            int n = b.Length;
+            diff.Add(b[0]);
+            for (int i = 1; i < n; ++i)
+            {
+                diff.Add((byte)(b[i - 1] - b[i]));
+            }
+            return diff.ToArray();
         }
 
         /*public static int[,] KernelProcessing(int[,] image, int[,] kernel)
