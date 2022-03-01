@@ -27,7 +27,7 @@ namespace ImageCompression
             string s = "{";
             for (int i = 0; i < array.Length; ++i)
             {
-                s += $"{array[i]},";
+                s += $"{array[i]}, ";
             }
             s = s.Remove(s.Length - 2);
             s += "}";
@@ -128,6 +128,51 @@ namespace ImageCompression
                 result.AddRange(temp);
             }
             return result.ToArray();
+        }
+
+        /*public static T[,] InverseMogarithm<T>(T[] subset)
+        {
+            T[,] ret = new T[Constants.MATRIX_SIZE, Constants.MATRIX_SIZE];
+            for (int i = 0; i < subset.Length * 2; ++i)
+            {
+                int index = i > subset.Length - 1 ? subset.Length - 1 : i;
+                T[] temp = new T[index];
+                for (int j = index; j >= 0; --j)
+                {
+                    if (i - j >= ret.GetLength(0)) continue;
+                    ret[j, i - j] = subset[index];
+                }
+                for (int j = index; j >= 0; --j)
+                {
+                    if (i - j >= ret.GetLength(0)) continue;
+                    ret[j, i - j] = subset[index];
+                }
+                if (i % 2 == 0) ReverseRange()
+            }
+        }*/
+
+        public static void ReverseRange<T>(T[] arr, int offset, int range)
+        {
+            for (int i = offset; i < (offset + range) / 2 && i < arr.Length; ++i)
+            {
+                T temp1 = arr[i];
+                int temp2 = offset + range - i;
+                arr[i] = arr[temp2];
+                arr[temp2] = temp1;
+            }
+        }
+
+        public static T[,] JaggedToDimension<T>(T[][] jagged)
+        {
+            T[,] ret = new T[jagged.Length, jagged[0].Length];
+            for (int i = 0; i < jagged.Length; ++i)
+            {
+                for (int j = 0; j < jagged[0].Length; ++j)
+                {
+                    ret[i, j] = jagged[i][j];
+                }
+            }
+            return ret;
         }
 
         public static T[] ConvertBack<T>(T[,] data)
@@ -235,6 +280,21 @@ namespace ImageCompression
                 diff.Add((byte)(b[i - 1] - b[i]));
             }
             return diff.ToArray();
+        }
+
+        public static T[,] ArrayToMatrix<T>(T[] buffer, int stride)
+        {
+            int total = buffer.Length;
+            int stridenums = total / stride;
+            T[,] data = new T[stridenums, stride];
+            for (int y = 0; y < stride; ++y)
+            {
+                for (int x = 0; x < stridenums; ++x)
+                {
+                    data[x, y] = buffer[x * stride + y];
+                }
+            }
+            return data;
         }
 
         /*public static int[,] KernelProcessing(int[,] image, int[,] kernel)

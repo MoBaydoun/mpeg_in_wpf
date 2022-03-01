@@ -36,9 +36,9 @@ namespace ImageCompression
             var cbSubsets = Helper.CreateSubsets(cb);
             var crSubsets = Helper.CreateSubsets(cr);
             //DCT 8x8s
-            var dctY = DCTRunnerSquared(ySubsets);
-            var dctCb = DCTRunnerSquared(cbSubsets);
-            var dctCr = DCTRunnerSquared(crSubsets);
+            var dctY = DCTNonThreadedRunnerSquared(ySubsets);
+            var dctCb = DCTNonThreadedRunnerSquared(cbSubsets);
+            var dctCr = DCTNonThreadedRunnerSquared(crSubsets);
             //Quantize
             var bSubY = QuantizeY(dctY);
             var bSubCb = QuantizeC(dctCb);
@@ -143,7 +143,7 @@ namespace ImageCompression
                 ret.Add(new List<byte[,]>());
                 for (int j = 0; j < y[i].Count; ++j)
                 {
-                    ret[i].Add(new byte[0,0]);
+                    ret[i].Add(new byte[0, 0]);
                     ret[i][j] = Helper.QuantizeLuminosity(y[i][j]);
                 }
             }
@@ -229,6 +229,26 @@ namespace ImageCompression
                 if (t == Constants.MAX_THREADS - 1) break;
             }
             return result;
+        }
+
+        private List<List<float[,]>> DCTNonThreadedRunnerSquared(List<List<float[,]>> img)
+        {
+            List<List<float[,]>> ret = new();
+            foreach (var list in img)
+            {
+                ret.Add(DCTNonThreadedRunner(list));
+            }
+            return ret;
+        }
+
+        private List<float[,]> DCTNonThreadedRunner(List<float[,]> img)
+        {
+            List<float[,]> ret = new();
+            foreach (var subset in img)
+            {
+                ret.Add(DCT(subset));
+            }
+            return ret;
         }
 
         private List<List<float[,]>> IDCTRunnerSquared(List<List<float[,]>> img)
@@ -332,29 +352,6 @@ namespace ImageCompression
         {
             return num == 0 ? (float)(1 / Math.Sqrt(2)) : 1;
         }
-
-        /*public static YCBCR[,] SubSample(YCBCR[,] image)
-        {
-            YCBCR[,] result = new YCBCR[image.GetLength(0), image.GetLength(1)];
-            for (int r = 0; r < image.GetLength(0); ++r)
-            {
-                for (int c = 0; c < image.GetLength(1); ++c)
-                {
-                    result[r, c] = new(image[r, c]);
-                    if (c % 2 != 0 && r % 2 == 0)
-                    {
-                        result[r, c].Cb = image[r, c - 1].Cb;
-                        result[r, c].Cr = image[r, c - 1].Cr;
-                    }
-                    else if (r % 2 != 0)
-                    {
-                        result[r, c].Cb = image[r - 1, c].Cb;
-                        result[r, c].Cr = image[r - 1, c].Cr;
-                    }
-                }
-            }
-            return result;
-        }*/
 
         public static float[,] SubSample(float[,] pComponent)
         {
