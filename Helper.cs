@@ -19,7 +19,7 @@ namespace ImageCompression
                 s += "}\n{";
             }
             s = s.Remove(s.Length - 1);
-            Trace.WriteLine(s);
+            Debug.WriteLine(s);
         }
 
         public static void PrintArray<T>(T[] array)
@@ -31,7 +31,7 @@ namespace ImageCompression
             }
             s = s.Remove(s.Length - 2);
             s += "}";
-            Trace.WriteLine(s);
+            Debug.WriteLine(s);
         }
 
         public static float[,] ConvertByteMatrixToFloat(byte[,] arr)
@@ -86,43 +86,43 @@ namespace ImageCompression
             return ret;
         }
 
-        public static float[,] DeQuantizeChrominance(float[,] arr)
+        public static float[,] DeQuantizeChrominance(byte[,] arr)
         {
             float[,] ret = new float[arr.GetLength(0), arr.GetLength(1)];
             for (int i = 0; i < arr.GetLength(0); ++i)
             {
                 for (int j = 0; j < arr.GetLength(1); ++j)
                 {
-                    ret[i, j] = MathF.Round(arr[i, j] * Constants.Q_CHROMINANCE[i, j]);
+                    ret[i, j] = arr[i, j] * Constants.Q_CHROMINANCE[i, j];
                 }
             }
             return ret;
         }
 
-        public static float[,] DeQuantizeLuminosity(float[,] arr)
+        public static float[,] DeQuantizeLuminosity(byte[,] arr)
         {
             float[,] ret = new float[arr.GetLength(0), arr.GetLength(1)];
             for (int i = 0; i < arr.GetLength(0); ++i)
             {
                 for (int j = 0; j < arr.GetLength(1); ++j)
                 {
-                    ret[i, j] = MathF.Round(arr[i, j] * Constants.Q_LUMINOSITY[i, j]);
+                    ret[i, j] = arr[i, j] * Constants.Q_LUMINOSITY[i, j];
                 }
             }
             return ret;
         }
 
-        public static T[] Mogarithm<T>(T[,] subset)
+        public static byte[] Mogarithm(byte[,] subset)
         {
-            List<T> result = new();
+            List<byte> result = new();
             for (int i = 0; i < subset.GetLength(0) * 2; ++i)
             {
-                List<T> temp = new();
+                List<byte> temp = new();
                 int index = i > subset.GetLength(0) - 1 ? subset.GetLength(0) - 1 : i;
                 for (int j = index; j >= 0; --j)
                 {
                     if (i - j >= subset.GetLength(0)) continue;
-                    temp.Add(subset[j, i - j]);
+                    temp.Add((byte)(subset[j, i - j] + sbyte.MaxValue + 1));
                 }
                 if (i % 2 == 0) temp.Reverse();
                 result.AddRange(temp);
@@ -130,26 +130,20 @@ namespace ImageCompression
             return result.ToArray();
         }
 
-        /*public static T[,] InverseMogarithm<T>(T[] subset)
+        public static T[,] InversentMogarithm<T>(T[] s)
         {
-            T[,] ret = new T[Constants.MATRIX_SIZE, Constants.MATRIX_SIZE];
-            for (int i = 0; i < subset.Length * 2; ++i)
+            return new T[8, 8]
             {
-                int index = i > subset.Length - 1 ? subset.Length - 1 : i;
-                T[] temp = new T[index];
-                for (int j = index; j >= 0; --j)
-                {
-                    if (i - j >= ret.GetLength(0)) continue;
-                    ret[j, i - j] = subset[index];
-                }
-                for (int j = index; j >= 0; --j)
-                {
-                    if (i - j >= ret.GetLength(0)) continue;
-                    ret[j, i - j] = subset[index];
-                }
-                if (i % 2 == 0) ReverseRange()
-            }
-        }*/
+                {s[0], s[2], s[3], s[9], s[10], s[20], s[21], s[35]},
+                {s[1], s[4], s[8], s[11], s[19], s[22], s[34], s[36]},
+                {s[5], s[7], s[12], s[18], s[23], s[33], s[37], s[48]},
+                {s[6], s[13], s[17], s[24], s[32], s[38], s[47], s[49]},
+                {s[14], s[16], s[25], s[31], s[39], s[46], s[50], s[57]},
+                {s[15], s[26], s[30], s[40], s[45], s[51], s[56], s[58]},
+                {s[27], s[29], s[41], s[44], s[52], s[55], s[59], s[62]},
+                {s[29], s[42], s[43], s[53], s[54], s[60], s[61], s[63]}
+            };
+        }
 
         public static void ReverseRange<T>(T[] arr, int offset, int range)
         {
@@ -175,7 +169,7 @@ namespace ImageCompression
             return ret;
         }
 
-        public static T[] ConvertBack<T>(T[,] data)
+        public static T[] MatrixToArray<T>(T[,] data)
         {
             List<T> bytes = new();
             for (int i = 0; i < data.GetLength(0); ++i)
@@ -241,6 +235,12 @@ namespace ImageCompression
             return img;
         }
 
+        public static void SaveWidthHeight<T>(List<List<T[,]>> subsets, out int width, out int height)
+        {
+            width = subsets.Count;
+            height = subsets[0].Count;
+        }
+
         public static byte[] MRLE(byte[] b)
         {
             List<byte> compressed = new List<byte>();
@@ -270,6 +270,29 @@ namespace ImageCompression
             return compressed.ToArray();
         }
 
+        public static byte[] Decompress(byte[] b)
+        {
+            List<byte> decompress = new List<byte>();
+            int n = b.Length;
+            for (int i = 0; i < n; ++i)
+            {
+                if (b[i] == Constants.KEY)
+                {
+                    int size = b[i + 1];
+                    i += 2;
+                    for (int j = 0; j < size; ++j)
+                    {
+                        decompress.Add(b[i]);
+                    }
+                }
+                else
+                {
+                    decompress.Add(b[i]);
+                }
+            }
+            return decompress.ToArray();
+        }
+
         public static byte[] DifferentialEncoding(byte[] b)
         {
             List<byte> diff = new List<byte>();
@@ -280,6 +303,18 @@ namespace ImageCompression
                 diff.Add((byte)(b[i - 1] - b[i]));
             }
             return diff.ToArray();
+        }
+
+        public static byte[] ReverseDifferentialEncoding(byte[] b)
+        {
+            List<byte> rediff = new List<byte>();
+            int n = b.Length;
+            rediff.Add(b[0]);
+            for (int i = 1; i < n - 1; ++i)
+            {
+                rediff.Add((byte)(rediff[i - 1] - b[i]));
+            }
+            return rediff.ToArray();
         }
 
         public static T[,] ArrayToMatrix<T>(T[] buffer, int stride)

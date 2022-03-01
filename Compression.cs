@@ -12,56 +12,151 @@ namespace ImageCompression
     {
         public Compression(Image img)
         {
+            Stopwatch bench = new();
+            bench.Start();
             //Construct stuff from source
+            Debug.WriteLine($"Constructing Data...");
             var src = img.Source as BitmapSource ?? throw new ArgumentNullException("Image does not exist");
             var image = ConvertData(src);
             //Bytes to RGB
+            Debug.WriteLine($"Assembling RGB...");
             var pixels = RGB.MatrixBufferToRGB(image);
             //RGB to YCbCr
-            YCBCR[,] YCbCrPixels = YCBCR.RGBMatrixToYCBCRMatrix(pixels);
+            Debug.WriteLine($"Converting to YCBCR...");
+            YCBCR[,]? YCbCrPixels = YCBCR.RGBMatrixToYCBCRMatrix(pixels);
             //Seperate channels
-            float[,] y;
-            float[,] cb;
-            float[,] cr;
-            YCBCR.DeconstructYCBCR(YCbCrPixels, out y, out cb, out cr);
+            Debug.WriteLine($"Seperating YCBCR Channels...");
+            YCBCR.DeconstructYCBCR(YCbCrPixels, out float[,]? y, out float[,]? cb, out float[,]? cr);
+            YCbCrPixels = null;
             //Subsample cb and cr
+            Debug.WriteLine($"Subsampling...");
             cb = SubSample(cb);
             cr = SubSample(cr);
             //Pad
+            Debug.WriteLine($"Padding...");
             y = Prepad(y, out int yRow, out int yCol);
             cb = Prepad(cb, out int cbRow, out int cbCol);
             cr = Prepad(cr, out int crRow, out int crCol);
             //Create 8x8s
+            Debug.WriteLine($"Creating Subsets...");
             var ySubsets = Helper.CreateSubsets(y);
             var cbSubsets = Helper.CreateSubsets(cb);
             var crSubsets = Helper.CreateSubsets(cr);
+            y = null;
+            cb = null;
+            cr = null;
             //DCT 8x8s
+            Debug.WriteLine($"DCT Start...");
             var dctY = DCTNonThreadedRunnerSquared(ySubsets);
             var dctCb = DCTNonThreadedRunnerSquared(cbSubsets);
             var dctCr = DCTNonThreadedRunnerSquared(crSubsets);
+            ySubsets = null;
+            cbSubsets = null;
+            crSubsets = null;
+            Debug.WriteLine($"DCT Finished: {bench.ElapsedMilliseconds} ms");
             //Quantize
+            Debug.WriteLine($"Quantizing...");
             var bSubY = QuantizeY(dctY);
             var bSubCb = QuantizeC(dctCb);
             var bSubCr = QuantizeC(dctCr);
+            dctY = null;
+            dctCb = null;
+            dctCr = null;
+            Helper.SaveWidthHeight(bSubY, out int yWidth, out int yHeight);
+            Helper.SaveWidthHeight(bSubCb, out int cbWidth, out int cbHeight);
+            Helper.SaveWidthHeight(bSubCr, out int crWidth, out int crHeight);
             //Mogarithm
+            Debug.WriteLine($"Mogarithmizing...");
             var yBytes = MogarithmRunner(bSubY);
             var cbBytes = MogarithmRunner(bSubCb);
             var crBytes = MogarithmRunner(bSubCr);
+            bSubY = null;
+            bSubCb = null;
+            bSubCr = null;
+            //store length for unpacking
+            var yLength = yBytes.Length;
+            var cbLength = cbBytes.Length;
+            var crLength = crBytes.Length;
             //Combine bytes
-            List<byte> bytes = new();
+            Debug.WriteLine($"Combining Channels...");
+            List<byte>? bytes = new();
             bytes.AddRange(yBytes);
             bytes.AddRange(cbBytes);
             bytes.AddRange(crBytes);
             //compress
-            var compressed = Helper.MRLE(Helper.DifferentialEncoding(bytes.ToArray()));
-            Trace.WriteLine(compressed.Length);
-            /*WriteableBitmap bmp = new(img.Source as BitmapSource);
+            Debug.WriteLine($"Compressing...");
+            var compressed = Helper.MRLE(bytes.ToArray());
+            bytes = null;
+            Debug.WriteLine($"Compressed Size: {compressed.Length}");
+            //decompress
+            Debug.WriteLine($"Decompressing...");
+            compressed = Helper.Decompress(compressed);
+            var compressedaslist = compressed.ToList();
+            compressed = null;
+            //unpack
+            Debug.WriteLine($"Unpacking Channels");
+            yBytes = compressedaslist.GetRange(0, yLength).ToArray();
+            cbBytes = compressedaslist.GetRange(yLength + 1, cbLength).ToArray();
+            crBytes = compressedaslist.GetRange(yLength + cbLength, crLength).ToArray();
+            compressedaslist = null;
+            //Demogarithmize
+            Debug.WriteLine($"Demogarithmizing...");
+            bSubY = Demogarithmizer(yBytes, yWidth, yHeight);
+            bSubCr = Demogarithmizer(cbBytes, cbWidth, cbHeight);
+            bSubCb = Demogarithmizer(crBytes, crWidth, crHeight);
+            yBytes = null;
+            cbBytes = null;
+            crBytes = null;
+            //Unquantize
+            Debug.WriteLine($"Unquantizing...");
+            var fSubY = DeQuantizeY(bSubY);
+            var fSubCb = DeQuantizeC(bSubCb);
+            var fSubCr = DeQuantizeC(bSubCr);
+            bSubY = null;
+            bSubCb = null;
+            bSubCr = null;
+            //IDCT
+            Debug.WriteLine($"IDCT Start...");
+            dctY = IDCTNonThreadedRunnerSquared(fSubY);
+            dctCb = IDCTNonThreadedRunnerSquared(fSubCb);
+            dctCr = IDCTNonThreadedRunnerSquared(fSubCr);
+            fSubY = null;
+            fSubCb = null;
+            fSubCr = null;
+            Debug.WriteLine($"IDCT Finished: {bench.ElapsedMilliseconds} ms");
+            //Reassemble
+            Debug.WriteLine($"Reassembling Subsets...");
+            y = Helper.ReassembleSubsets(dctY);
+            cb = Helper.ReassembleSubsets(dctCb);
+            cr = Helper.ReassembleSubsets(dctCr);
+            dctY = null;
+            dctCb = null;
+            dctCr = null;
+            //Unpad
+            Debug.WriteLine($"Unpadding...");
+            y = Unpad(y, yRow, yCol);
+            cb = Unpad(cb, cbRow, cbCol);
+            cr = Unpad(cr, crRow, crCol);
+            //Unsample
+            Debug.WriteLine($"Unsampling...");
+            cb = Unsample(cb);
+            cr = Unsample(cr);
+            //Combine channels
+            Debug.WriteLine($"Reconstructing YCBCR...");
+            YCbCrPixels = YCBCR.ReconstructYCBCR(y, cb, cr);
+            //Writing to buffer
+            Debug.WriteLine($"Writing to Buffer...");
+            var buffer = Helper.MatrixToArray(YCBCR.YCBCRtoBuffer(YCbCrPixels));
+            YCbCrPixels = null;
+            WriteableBitmap bmp = new(img.Source as BitmapSource);
             bmp.WritePixels(
                 new System.Windows.Int32Rect(0, 0, src.PixelWidth, src.PixelHeight),
                 buffer,
                 src.PixelWidth * src.Format.BitsPerPixel / 8,
                 0);
-            img.Source = bmp;*/
+            img.Source = bmp;
+            bench.Stop();
+            Debug.WriteLine($"Finished: {bench.ElapsedMilliseconds} ms");
             GC.Collect();
         }
 
@@ -76,6 +171,27 @@ namespace ImageCompression
                 }
             }
             return ret.ToArray();
+        }
+
+        public static List<List<byte[,]>> Demogarithmizer(byte[] channel, int width, int height)
+        {
+            List<byte[,]> temp = new();
+            var channellist = channel.ToList();
+            for (int i = 0; i < channel.Length; i += 64)
+            {
+                temp.Add(Helper.InversentMogarithm(channellist.GetRange(i, 64).ToArray()));
+            }
+            List<List<byte[,]>> ret = new();
+            for (int i = 0; i < height; ++i)
+            {
+                ret.Add(new List<byte[,]>());
+                for (int j = 0; j < width; ++j)
+                {
+                    ret[i].Add(new byte[0, 0]);
+                    ret[i][j] = temp[j * width + i];
+                }
+            }
+            return ret;
         }
 
         public static float[,] Unsample(float[,] arr)
@@ -96,11 +212,7 @@ namespace ImageCompression
 
         public static float[,] Unpad(float[,] arr, int rowDivis, int colDivis)
         {
-            if (rowDivis == 0 && colDivis == 0)
-            {
-                Trace.WriteLine("im a funcking moron");
-                return arr;
-            }
+            if (rowDivis == 0 && colDivis == 0) return arr;
             float[,] ret = new float[arr.GetLength(0) - rowDivis, arr.GetLength(1) - colDivis];
             for (int i = 0; i < ret.GetLength(0); ++i)
             {
@@ -165,37 +277,43 @@ namespace ImageCompression
             return ret;
         }
 
-        private void DeQuantizeY(ref List<List<float[,]>> y)
+        private List<List<float[,]>> DeQuantizeY(List<List<byte[,]>> y)
         {
+            List<List<float[,]>> ret = new();
             for (int i = 0; i < y.Count; ++i)
             {
+                ret.Add(new List<float[,]>());
                 for (int j = 0; j < y[i].Count; ++j)
                 {
-                    y[i][j] = Helper.DeQuantizeLuminosity(y[i][j]);
+                    ret[i].Add(new float[0, 0]);
+                    ret[i][j] = Helper.DeQuantizeLuminosity(y[i][j]);
                 }
             }
+            return ret;
         }
 
-        private void DeQuantizeC(ref List<List<float[,]>> c)
+        private List<List<float[,]>> DeQuantizeC(List<List<byte[,]>> c)
         {
+            List<List<float[,]>> ret = new();
             for (int i = 0; i < c.Count; ++i)
             {
+                ret.Add(new List<float[,]>());
                 for (int j = 0; j < c[i].Count; ++j)
                 {
-                    c[i][j] = Helper.DeQuantizeChrominance(c[i][j]);
+                    ret[i].Add(new float[0, 0]);
+                    ret[i][j] = Helper.DeQuantizeChrominance(c[i][j]);
                 }
             }
+            return ret;
         }
 
         private List<List<float[,]>> DCTRunnerSquared(List<List<float[,]>> img)
         {
-            Trace.WriteLine("DCT Start");
             List<List<float[,]>> returnable = new();
             foreach (var subset in img)
             {
                 returnable.Add(DCTRunner(subset));
             }
-            Trace.WriteLine("DCT End");
             return returnable;
         }
 
@@ -251,15 +369,33 @@ namespace ImageCompression
             return ret;
         }
 
+        private List<List<float[,]>> IDCTNonThreadedRunnerSquared(List<List<float[,]>> img)
+        {
+            List<List<float[,]>> ret = new();
+            foreach (var list in img)
+            {
+                ret.Add(IDCTNonThreadedRunner(list));
+            }
+            return ret;
+        }
+
+        private List<float[,]> IDCTNonThreadedRunner(List<float[,]> img)
+        {
+            List<float[,]> ret = new();
+            foreach (var subset in img)
+            {
+                ret.Add(InverseDCT(subset));
+            }
+            return ret;
+        }
+
         private List<List<float[,]>> IDCTRunnerSquared(List<List<float[,]>> img)
         {
-            Trace.WriteLine("IDCT Start");
             List<List<float[,]>> returnable = new();
             foreach (var subset in img)
             {
                 returnable.Add(IDCTRunner(subset));
             }
-            Trace.WriteLine("IDCT End");
             return returnable;
         }
 
@@ -342,7 +478,7 @@ namespace ImageCompression
                                 * H[u, v];
                         }
                     }
-                    h[x, y] = FloatRound(accumulator * (2 / MathF.Sqrt(height * width)));
+                    h[x, y] = FloatRound(accumulator * (2 / MathF.Sqrt(height * width)) + sbyte.MinValue);
                 }
             }
             return h;
@@ -373,7 +509,7 @@ namespace ImageCompression
             int stridenums = total / stride;
             byte[] buffer = new byte[total];
             src.CopyPixels(buffer, stride, 0);
-            Trace.WriteLine(buffer.Length);
+            Debug.WriteLine($"Original Size: {buffer.Length}");
             float[,] data = new float[stridenums, stride];
 
             for (int y = 0; y < stride; ++y)
