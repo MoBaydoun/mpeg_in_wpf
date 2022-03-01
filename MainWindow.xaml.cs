@@ -16,6 +16,15 @@ namespace ImageCompression
         public MainWindow()
         {
             InitializeComponent();
+            List<int> l = new();
+            for (int i = 0; i < 256; ++i)
+            {
+                l.Add(i);
+            }
+            for (int i = 0; i < l.Count; i += 64)
+            {
+                Helper.PrintArray(l.GetRange(i, 64).ToArray());
+            }
         }
 
 
@@ -35,8 +44,10 @@ namespace ImageCompression
             };
             if (ofd.ShowDialog() == true)
             {
-                Compressee.Source = new BitmapImage(new Uri(ofd.FileName));/*
-                Compressee.Width = Constants.IMAGE_SIZE;
+                Compressee.Source = new BitmapImage(new Uri(ofd.FileName));
+                Compressee.Width = Width;
+                Compressee.Height = Height;
+                /*Compressee.Width = Constants.IMAGE_SIZE;
                 Compressee.Height = Constants.IMAGE_SIZE;
                 BitmapSource src = Compressee.Source as BitmapSource ?? throw new ArgumentException("No Image Provided");
                 float scaleX = (float)Constants.IMAGE_SIZE / src.PixelWidth;
@@ -48,7 +59,7 @@ namespace ImageCompression
 
         private void Compress(object sender, RoutedEventArgs e)
         {
-            Compression c = new(Compressee);
+            new Compression(Compressee);
             Debug.WriteLine("Did something");
         }
 

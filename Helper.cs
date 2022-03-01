@@ -60,33 +60,33 @@ namespace ImageCompression
             return ret;
         }
 
-        public static byte[,] QuantizeChrominance(float[,] arr)
+        public static float[,] QuantizeChrominance(float[,] arr)
         {
-            byte[,] ret = new byte[arr.GetLength(0), arr.GetLength(1)];
+            float[,] ret = new float[arr.GetLength(0), arr.GetLength(1)];
             for (int i = 0; i < arr.GetLength(0); ++i)
             {
                 for (int j = 0; j < arr.GetLength(1); ++j)
                 {
-                    ret[i, j] = Math.Clamp((byte)MathF.Round(arr[i, j] / Constants.Q_CHROMINANCE[i, j]), byte.MinValue, byte.MaxValue);
+                    ret[i, j] = MathF.Round(arr[i, j] / Constants.Q_CHROMINANCE[i, j]);
                 }
             }
             return ret;
         }
 
-        public static byte[,] QuantizeLuminosity(float[,] arr)
+        public static float[,] QuantizeLuminosity(float[,] arr)
         {
-            byte[,] ret = new byte[arr.GetLength(0), arr.GetLength(1)];
+            float[,] ret = new float[arr.GetLength(0), arr.GetLength(1)];
             for (int i = 0; i < arr.GetLength(0); ++i)
             {
                 for (int j = 0; j < arr.GetLength(1); ++j)
                 {
-                    ret[i, j] = Math.Clamp((byte)MathF.Round(arr[i, j] / Constants.Q_LUMINOSITY[i, j]), byte.MinValue, byte.MaxValue);
+                    ret[i, j] = MathF.Round(arr[i, j] / Constants.Q_LUMINOSITY[i, j]);
                 }
             }
             return ret;
         }
 
-        public static float[,] DeQuantizeChrominance(byte[,] arr)
+        public static float[,] DeQuantizeChrominance(float[,] arr)
         {
             float[,] ret = new float[arr.GetLength(0), arr.GetLength(1)];
             for (int i = 0; i < arr.GetLength(0); ++i)
@@ -99,7 +99,7 @@ namespace ImageCompression
             return ret;
         }
 
-        public static float[,] DeQuantizeLuminosity(byte[,] arr)
+        public static float[,] DeQuantizeLuminosity(float[,] arr)
         {
             float[,] ret = new float[arr.GetLength(0), arr.GetLength(1)];
             for (int i = 0; i < arr.GetLength(0); ++i)
@@ -112,7 +112,7 @@ namespace ImageCompression
             return ret;
         }
 
-        public static byte[] Mogarithm(byte[,] subset)
+        public static byte[] Mogarithm(float[,] subset)
         {
             List<byte> result = new();
             for (int i = 0; i < subset.GetLength(0) * 2; ++i)
@@ -130,9 +130,9 @@ namespace ImageCompression
             return result.ToArray();
         }
 
-        public static T[,] InversentMogarithm<T>(T[] s)
+        public static float[,] InversentMogarithm(byte[] s)
         {
-            return new T[8, 8]
+            return new float[8, 8]
             {
                 {s[0], s[2], s[3], s[9], s[10], s[20], s[21], s[35]},
                 {s[1], s[4], s[8], s[11], s[19], s[22], s[34], s[36]},

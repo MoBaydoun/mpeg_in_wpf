@@ -96,7 +96,7 @@ namespace ImageCompression
             //unpack
             Debug.WriteLine($"Unpacking Channels");
             yBytes = compressedaslist.GetRange(0, yLength).ToArray();
-            cbBytes = compressedaslist.GetRange(yLength + 1, cbLength).ToArray();
+            cbBytes = compressedaslist.GetRange(yLength, cbLength).ToArray();
             crBytes = compressedaslist.GetRange(yLength + cbLength, crLength).ToArray();
             compressedaslist = null;
             //Demogarithmize
@@ -160,7 +160,7 @@ namespace ImageCompression
             GC.Collect();
         }
 
-        public static byte[] MogarithmRunner(List<List<byte[,]>> subsets)
+        public static byte[] MogarithmRunner(List<List<float[,]>> subsets)
         {
             List<byte> ret = new();
             for (int i = 0; i < subsets.Count; ++i)
@@ -173,21 +173,31 @@ namespace ImageCompression
             return ret.ToArray();
         }
 
-        public static List<List<byte[,]>> Demogarithmizer(byte[] channel, int width, int height)
+        public static List<List<float[,]>> Demogarithmizer(byte[] channel, int width, int height)
         {
-            List<byte[,]> temp = new();
+            List<float[,]> temp = new();
             var channellist = channel.ToList();
             for (int i = 0; i < channel.Length; i += 64)
             {
                 temp.Add(Helper.InversentMogarithm(channellist.GetRange(i, 64).ToArray()));
             }
-            List<List<byte[,]>> ret = new();
+            foreach (var subset in temp)
+            {
+                for (int i = 0; i < subset.GetLength(0); ++i)
+                {
+                    for (int j = 0; j < subset.GetLength(1); ++j)
+                    {
+                        subset[i, j] -= 128;
+                    }
+                }
+            }
+            List<List<float[,]>> ret = new();
             for (int i = 0; i < height; ++i)
             {
-                ret.Add(new List<byte[,]>());
+                ret.Add(new List<float[,]>());
                 for (int j = 0; j < width; ++j)
                 {
-                    ret[i].Add(new byte[0, 0]);
+                    ret[i].Add(new float[0, 0]);
                     ret[i][j] = temp[j * width + i];
                 }
             }
@@ -247,37 +257,37 @@ namespace ImageCompression
             return ret;
         }
 
-        private List<List<byte[,]>> QuantizeY(List<List<float[,]>> y)
+        private List<List<float[,]>> QuantizeY(List<List<float[,]>> y)
         {
-            List<List<byte[,]>> ret = new();
+            List<List<float[,]>> ret = new();
             for (int i = 0; i < y.Count; ++i)
             {
-                ret.Add(new List<byte[,]>());
+                ret.Add(new List<float[,]>());
                 for (int j = 0; j < y[i].Count; ++j)
                 {
-                    ret[i].Add(new byte[0, 0]);
+                    ret[i].Add(new float[0, 0]);
                     ret[i][j] = Helper.QuantizeLuminosity(y[i][j]);
                 }
             }
             return ret;
         }
 
-        private List<List<byte[,]>> QuantizeC(List<List<float[,]>> c)
+        private List<List<float[,]>> QuantizeC(List<List<float[,]>> c)
         {
-            List<List<byte[,]>> ret = new();
+            List<List<float[,]>> ret = new();
             for (int i = 0; i < c.Count; ++i)
             {
-                ret.Add(new List<byte[,]>());
+                ret.Add(new List<float[,]>());
                 for (int j = 0; j < c[i].Count; ++j)
                 {
-                    ret[i].Add(new byte[0, 0]);
+                    ret[i].Add(new float[0, 0]);
                     ret[i][j] = Helper.QuantizeChrominance(c[i][j]);
                 }
             }
             return ret;
         }
 
-        private List<List<float[,]>> DeQuantizeY(List<List<byte[,]>> y)
+        private List<List<float[,]>> DeQuantizeY(List<List<float[,]>> y)
         {
             List<List<float[,]>> ret = new();
             for (int i = 0; i < y.Count; ++i)
@@ -292,7 +302,7 @@ namespace ImageCompression
             return ret;
         }
 
-        private List<List<float[,]>> DeQuantizeC(List<List<byte[,]>> c)
+        private List<List<float[,]>> DeQuantizeC(List<List<float[,]>> c)
         {
             List<List<float[,]>> ret = new();
             for (int i = 0; i < c.Count; ++i)
@@ -478,7 +488,7 @@ namespace ImageCompression
                                 * H[u, v];
                         }
                     }
-                    h[x, y] = FloatRound(accumulator * (2 / MathF.Sqrt(height * width)) + sbyte.MinValue);
+                    h[x, y] = FloatRound(accumulator * (2 / MathF.Sqrt(height * width)));
                 }
             }
             return h;

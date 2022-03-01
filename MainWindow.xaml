@@ -7,9 +7,9 @@
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
     <Grid Background="#FF3A3333">
-        <Canvas x:Name="ImageLoader" Width="400" Height="400" Background="Transparent" MouseUp="LoadImage">
-            <Image x:Name="Compressee" Width="400" Height="400"></Image>
+        <Canvas x:Name="ImageLoader" Background="Transparent" MouseUp="LoadImage">
+            <Image x:Name="Compressee"></Image>
         </Canvas>
-        <Button Content="Do Something" HorizontalAlignment="Left" Margin="106,91,0,0" VerticalAlignment="Top" Click="Compress"/>
+        <Button Content="Do Something" HorizontalAlignment="Left" Margin="10,17,0,0" VerticalAlignment="Top" Click="Compress"/>
     </Grid>
 </Window>
