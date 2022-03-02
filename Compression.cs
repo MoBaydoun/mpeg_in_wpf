@@ -30,9 +30,11 @@ namespace ImageCompression
             cb = SubSample(cb);
             cr = SubSample(cr);
             //Pad
-            y = Prepad(y, out int yRow, out int yCol);
-            cb = Prepad(cb, out int cbRow, out int cbCol);
-            cr = Prepad(cr, out int crRow, out int crCol);
+            byte rowAdj = 0;
+            byte colAdj = 0;
+            y = Prepad(y, out int yRow, out int yCol, rowAdj, colAdj);
+            cb = Prepad(cb, out int cbRow, out int cbCol, rowAdj, colAdj);
+            cr = Prepad(cr, out int crRow, out int crCol, rowAdj, colAdj);
             //Create 8x8s
             var ySubset = Helper.CreateSubsets(y);
             var cbSubset = Helper.CreateSubsets(cb);
@@ -62,12 +64,14 @@ namespace ImageCompression
             var compressed = Helper.MRLE(combined.ToArray());
             Debug.WriteLine($"Compressed Size: {compressed.Length}");
             SaveJPEG(compressed, src.PixelWidth, src.PixelHeight, (byte)src.Format.BitsPerPixel,
-                yBytes.Length, cbBytes.Length, (byte)yRow, (byte)yCol, (byte)cbRow, (byte)cbCol, yWidth, yHeight, cbWidth, cbHeight);
+                yBytes.Length, cbBytes.Length, (byte)yRow, (byte)yCol, (byte)cbRow, (byte)cbCol,
+                rowAdj, colAdj, yWidth, yHeight, cbWidth, cbHeight);
         }
 
         public static void SaveJPEG(byte[] compressed,
             int pixWidth, int pixHeight, byte bpx, int yBytesLen, int cBytesLen,
             byte yPadW, byte yPadH, byte cPadW, byte cPadH,
+            byte rowAdj, byte colAdj,
             int yWidth, int yHeight, int cWidth, int cHeight)
         {
             SaveFileDialog sfd = new();
@@ -297,7 +301,9 @@ namespace ImageCompression
         public static float[,] Unpad(float[,] arr, int rowDivis, int colDivis)
         {
             if (rowDivis == 0 && colDivis == 0) return arr;
-            float[,] ret = new float[arr.GetLength(0) - rowDivis, arr.GetLength(1) - colDivis];
+            int row = (arr.GetLength(0) - rowDivis) % 2 == 0 ? arr.GetLength(0) - rowDivis : arr.GetLength(0) - rowDivis + 1; 
+            int col = (arr.GetLength(1) - colDivis) % 2 == 0 ? arr.GetLength(1) - colDivis : arr.GetLength(1) - colDivis + 1; 
+            float[,] ret = new float[row, col];
             for (int i = 0; i < ret.GetLength(0); ++i)
             {
                 for (int j = 0; j < ret.GetLength(1); ++j)
@@ -308,10 +314,14 @@ namespace ImageCompression
             return ret;
         }
 
-        public static float[,] Prepad(float[,] arr, out int rowDivis, out int colDivis)
+        public static float[,] Prepad(float[,] arr, out int rowDivis, out int colDivis, byte rowAdj, byte colAdj)
         {
             rowDivis = 0;
             colDivis = 0;
+            if (arr.GetLength(0) % 2 == 0) rowAdj = 0;
+            else rowAdj = 1;
+            if (arr.GetLength(1) % 2 == 0) colAdj = 0;
+            else colAdj = 1;
             while ((arr.GetLength(0) + rowDivis) % Constants.MATRIX_SIZE != 0)
             {
                 ++rowDivis;
