@@ -16,15 +16,6 @@ namespace ImageCompression
         public MainWindow()
         {
             InitializeComponent();
-            List<int> l = new();
-            for (int i = 0; i < 256; ++i)
-            {
-                l.Add(i);
-            }
-            for (int i = 0; i < l.Count; i += 64)
-            {
-                Helper.PrintArray(l.GetRange(i, 64).ToArray());
-            }
         }
 
 
@@ -60,8 +51,14 @@ namespace ImageCompression
         private void Compress(object sender, RoutedEventArgs e)
         {
             new Compression(Compressee);
-            Debug.WriteLine("Did something");
         }
 
+        private void OpenCompressed(object sender, RoutedEventArgs e)
+        {
+            Compressee.Source = Compression.OpenCompressed();
+            Compressee.Width = Width;
+            Compressee.Height = Height;
+            Debug.WriteLine($"Uncompressed");
+        }
     }
 }

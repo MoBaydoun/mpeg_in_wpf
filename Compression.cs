@@ -4,7 +4,10 @@ using System.Linq;
 using System.Diagnostics;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
+using System.Windows.Media;
 using System.Threading.Tasks;
+using Microsoft.Win32;
+using System.IO;
 
 namespace ImageCompression
 {
@@ -12,152 +15,220 @@ namespace ImageCompression
     {
         public Compression(Image img)
         {
-            Stopwatch bench = new();
-            bench.Start();
+            
             //Construct stuff from source
             Debug.WriteLine($"Constructing Data...");
             var src = img.Source as BitmapSource ?? throw new ArgumentNullException("Image does not exist");
             var image = ConvertData(src);
             //Bytes to RGB
-            Debug.WriteLine($"Assembling RGB...");
-            var pixels = RGB.MatrixBufferToRGB(image);
+            var rgbpixels = RGB.MatrixBufferToRGB(image);
             //RGB to YCbCr
-            Debug.WriteLine($"Converting to YCBCR...");
-            YCBCR[,]? YCbCrPixels = YCBCR.RGBMatrixToYCBCRMatrix(pixels);
+            var ycbcrpixels = YCBCR.RGBMatrixToYCBCRMatrix(rgbpixels);
             //Seperate channels
-            Debug.WriteLine($"Seperating YCBCR Channels...");
-            YCBCR.DeconstructYCBCR(YCbCrPixels, out float[,]? y, out float[,]? cb, out float[,]? cr);
-            YCbCrPixels = null;
+            YCBCR.DeconstructYCBCR(ycbcrpixels, out float[,] y, out float[,] cb, out float[,] cr);
             //Subsample cb and cr
-            Debug.WriteLine($"Subsampling...");
             cb = SubSample(cb);
             cr = SubSample(cr);
             //Pad
-            Debug.WriteLine($"Padding...");
             y = Prepad(y, out int yRow, out int yCol);
             cb = Prepad(cb, out int cbRow, out int cbCol);
             cr = Prepad(cr, out int crRow, out int crCol);
             //Create 8x8s
-            Debug.WriteLine($"Creating Subsets...");
-            var ySubsets = Helper.CreateSubsets(y);
-            var cbSubsets = Helper.CreateSubsets(cb);
-            var crSubsets = Helper.CreateSubsets(cr);
-            y = null;
-            cb = null;
-            cr = null;
+            var ySubset = Helper.CreateSubsets(y);
+            var cbSubset = Helper.CreateSubsets(cb);
+            var crSubset = Helper.CreateSubsets(cr);
             //DCT 8x8s
-            Debug.WriteLine($"DCT Start...");
-            var dctY = DCTNonThreadedRunnerSquared(ySubsets);
-            var dctCb = DCTNonThreadedRunnerSquared(cbSubsets);
-            var dctCr = DCTNonThreadedRunnerSquared(crSubsets);
-            ySubsets = null;
-            cbSubsets = null;
-            crSubsets = null;
-            Debug.WriteLine($"DCT Finished: {bench.ElapsedMilliseconds} ms");
+            ySubset = DCTNonThreadedRunnerSquared(ySubset);
+            cbSubset = DCTNonThreadedRunnerSquared(cbSubset);
+            crSubset = DCTNonThreadedRunnerSquared(crSubset);
             //Quantize
-            Debug.WriteLine($"Quantizing...");
-            var bSubY = QuantizeY(dctY);
-            var bSubCb = QuantizeC(dctCb);
-            var bSubCr = QuantizeC(dctCr);
-            dctY = null;
-            dctCb = null;
-            dctCr = null;
-            Helper.SaveWidthHeight(bSubY, out int yWidth, out int yHeight);
-            Helper.SaveWidthHeight(bSubCb, out int cbWidth, out int cbHeight);
-            Helper.SaveWidthHeight(bSubCr, out int crWidth, out int crHeight);
+            ySubset = QuantizeY(ySubset);
+            cbSubset = QuantizeY(cbSubset);
+            crSubset = QuantizeY(crSubset);
             //Mogarithm
-            Debug.WriteLine($"Mogarithmizing...");
-            var yBytes = MogarithmRunner(bSubY);
-            var cbBytes = MogarithmRunner(bSubCb);
-            var crBytes = MogarithmRunner(bSubCr);
-            bSubY = null;
-            bSubCb = null;
-            bSubCr = null;
+            var yBytes = MogarithmRunner(ySubset);
+            var cbBytes = MogarithmRunner(cbSubset);
+            var crBytes = MogarithmRunner(crSubset);
             //store length for unpacking
-            var yLength = yBytes.Length;
-            var cbLength = cbBytes.Length;
-            var crLength = crBytes.Length;
+            Helper.SaveWidthHeight(ySubset, out int yWidth, out int yHeight);
+            Helper.SaveWidthHeight(cbSubset, out int cbWidth, out int cbHeight);
+            Helper.SaveWidthHeight(crSubset, out int crWidth, out int crHeight);
             //Combine bytes
-            Debug.WriteLine($"Combining Channels...");
-            List<byte>? bytes = new();
-            bytes.AddRange(yBytes);
-            bytes.AddRange(cbBytes);
-            bytes.AddRange(crBytes);
+            List<byte> combined = new();
+            combined.AddRange(yBytes);
+            combined.AddRange(cbBytes);
+            combined.AddRange(crBytes);
             //compress
-            Debug.WriteLine($"Compressing...");
-            var compressed = Helper.MRLE(bytes.ToArray());
-            bytes = null;
+            var compressed = Helper.MRLE(combined.ToArray());
             Debug.WriteLine($"Compressed Size: {compressed.Length}");
+            SaveJPEG(compressed, src.PixelWidth, src.PixelHeight, (byte)src.Format.BitsPerPixel,
+                yBytes.Length, cbBytes.Length, (byte)yRow, (byte)yCol, (byte)cbRow, (byte)cbCol, yWidth, yHeight, cbWidth, cbHeight);
+        }
+
+        public static void SaveJPEG(byte[] compressed,
+            int pixWidth, int pixHeight, byte bpx, int yBytesLen, int cBytesLen,
+            byte yPadW, byte yPadH, byte cPadW, byte cPadH,
+            int yWidth, int yHeight, int cWidth, int cHeight)
+        {
+            SaveFileDialog sfd = new();
+            sfd.Filter = "Files Compressed by Mo (*.pegnt) | *.pegnt";
+            sfd.DefaultExt = "pegnt";
+            if (sfd.ShowDialog() == true)
+            {
+                FileStream fs = (FileStream)sfd.OpenFile();
+                BinaryWriter writer = new(fs);
+                writer.Write(pixWidth);
+                writer.Write(pixHeight);
+                writer.Write(bpx);
+                writer.Write(yBytesLen);
+                writer.Write(cBytesLen);
+                writer.Write(yPadW);
+                writer.Write(yPadH);
+                writer.Write(cPadW);
+                writer.Write(cPadH);
+                writer.Write(yWidth);
+                writer.Write(yHeight);
+                writer.Write(cWidth);
+                writer.Write(cHeight);
+                writer.Write(compressed.Length);
+                writer.Write(compressed);
+                Debug.WriteLine($"Width: {pixWidth}");
+                Debug.WriteLine($"Height: {pixHeight}");
+                Debug.WriteLine($"Bits Per Pixel: {bpx}");
+                Debug.WriteLine($"Y Length: {yBytesLen}");
+                Debug.WriteLine($"C Length: {cBytesLen}");
+                Debug.WriteLine($"Y Pad Needed (W): {yPadW}");
+                Debug.WriteLine($"Y Pad Needed (H): {yPadH}");
+                Debug.WriteLine($"C Pad Needed (W): {cPadW}");
+                Debug.WriteLine($"C Pad Needed (H): {cPadH}");
+                Debug.WriteLine($"Y Subsets (W): {yWidth}");
+                Debug.WriteLine($"Y Subsets (H): {yHeight}");
+                Debug.WriteLine($"C Subsets (W): {cWidth}");
+                Debug.WriteLine($"C Subsets (H): {cHeight}");
+                Debug.WriteLine($"Compressed Length: {compressed.Length}");
+            } else
+            {
+                Debug.WriteLine($"Saving File Failed...");
+            }
+        }
+
+        public static void OpenJPEG(out byte[] compressed,
+            out int pixWidth, out int pixHeight, out int bpx, out int yBytesLen, out int cBytesLen,
+            out int yPadW, out int yPadH, out int cPadW, out int cPadH,
+            out int yWidth, out int yHeight, out int cWidth, out int cHeight)
+        {
+            OpenFileDialog ofd = new();
+            ofd.Filter = "Files Compressed by Mo (*.pegnt) | *.pegnt";
+            ofd.DefaultExt = "pegnt";
+            if (ofd.ShowDialog() == true)
+            {
+                FileStream fs = (FileStream)ofd.OpenFile();
+                BinaryReader reader = new(fs);
+                pixWidth = reader.ReadInt32();
+                pixHeight = reader.ReadInt32();
+                bpx = reader.ReadByte();
+                yBytesLen = reader.ReadInt32();
+                cBytesLen = reader.ReadInt32();
+                yPadW = reader.ReadByte();
+                yPadH = reader.ReadByte();
+                cPadW = reader.ReadByte();
+                cPadH = reader.ReadByte();
+                yWidth = reader.ReadInt32();
+                yHeight = reader.ReadInt32();
+                cWidth = reader.ReadInt32();
+                cHeight = reader.ReadInt32();
+                var length = reader.ReadInt32();
+                compressed = reader.ReadBytes(length);
+                Debug.WriteLine($"Width: {pixWidth}");
+                Debug.WriteLine($"Height: {pixHeight}");
+                Debug.WriteLine($"Bits Per Pixel: {bpx}");
+                Debug.WriteLine($"Y Length: {yBytesLen}");
+                Debug.WriteLine($"C Length: {cBytesLen}");
+                Debug.WriteLine($"Y Pad Needed (W): {yPadW}");
+                Debug.WriteLine($"Y Pad Needed (H): {yPadH}");
+                Debug.WriteLine($"C Pad Needed (W): {cPadW}");
+                Debug.WriteLine($"C Pad Needed (H): {cPadH}");
+                Debug.WriteLine($"Y Subsets (W): {yWidth}");
+                Debug.WriteLine($"Y Subsets (H): {yHeight}");
+                Debug.WriteLine($"C Subsets (W): {cWidth}");
+                Debug.WriteLine($"C Subsets (H): {cHeight}");
+                Debug.WriteLine($"Compressed Length: {length}");
+            }
+            else
+            {
+                pixWidth = 0;
+                pixHeight = 0;
+                bpx = 0;
+                yBytesLen = 0;
+                cBytesLen = 0;
+                yPadW = 0;
+                yPadH = 0;
+                cPadW = 0;
+                cPadH = 0;
+                yWidth = 0;
+                yHeight = 0;
+                cWidth = 0;
+                cHeight = 0;
+                compressed = null;
+                Debug.WriteLine($"Opening File Failed...");
+            }
+        }
+
+        public static BitmapSource OpenCompressed()
+        {
+            OpenJPEG(out byte[] compressed,
+                out int pixWidth, out int pixHeight, out int bpx,
+                out int yBytesLen, out int cBytesLen,
+                out int yPadW, out int yPadH, out int cPadW, out int cPadH,
+                out int yWidth, out int yHeight, out int cWidth, out int cHeight);
             //decompress
-            Debug.WriteLine($"Decompressing...");
-            compressed = Helper.Decompress(compressed);
-            var compressedaslist = compressed.ToList();
-            compressed = null;
+            var combined = Helper.Decompress(compressed.ToArray()).ToList();
             //unpack
-            Debug.WriteLine($"Unpacking Channels");
-            yBytes = compressedaslist.GetRange(0, yLength).ToArray();
-            cbBytes = compressedaslist.GetRange(yLength, cbLength).ToArray();
-            crBytes = compressedaslist.GetRange(yLength + cbLength, crLength).ToArray();
-            compressedaslist = null;
+            var yBytes = combined.GetRange(0, yBytesLen).ToArray();
+            var cbBytes = combined.GetRange(yBytesLen, cBytesLen).ToArray();
+            var crBytes = combined.GetRange(yBytesLen + cBytesLen, cBytesLen).ToArray();
             //Demogarithmize
-            Debug.WriteLine($"Demogarithmizing...");
-            bSubY = Demogarithmizer(yBytes, yWidth, yHeight);
-            bSubCr = Demogarithmizer(cbBytes, cbWidth, cbHeight);
-            bSubCb = Demogarithmizer(crBytes, crWidth, crHeight);
-            yBytes = null;
-            cbBytes = null;
-            crBytes = null;
+            var ySubset = Demogarithmizer(yBytes, yWidth, yHeight);
+            var cbSubset = Demogarithmizer(cbBytes, cWidth, cHeight);
+            var crSubset = Demogarithmizer(crBytes, cWidth, cHeight);
             //Unquantize
-            Debug.WriteLine($"Unquantizing...");
-            var fSubY = DeQuantizeY(bSubY);
-            var fSubCb = DeQuantizeC(bSubCb);
-            var fSubCr = DeQuantizeC(bSubCr);
-            bSubY = null;
-            bSubCb = null;
-            bSubCr = null;
+            ySubset = DeQuantizeY(ySubset);
+            cbSubset = DeQuantizeY(cbSubset);
+            crSubset = DeQuantizeY(crSubset);
             //IDCT
-            Debug.WriteLine($"IDCT Start...");
-            dctY = IDCTNonThreadedRunnerSquared(fSubY);
-            dctCb = IDCTNonThreadedRunnerSquared(fSubCb);
-            dctCr = IDCTNonThreadedRunnerSquared(fSubCr);
-            fSubY = null;
-            fSubCb = null;
-            fSubCr = null;
-            Debug.WriteLine($"IDCT Finished: {bench.ElapsedMilliseconds} ms");
+            ySubset = IDCTNonThreadedRunnerSquared(ySubset);
+            cbSubset = IDCTNonThreadedRunnerSquared(cbSubset);
+            crSubset = IDCTNonThreadedRunnerSquared(crSubset);
             //Reassemble
-            Debug.WriteLine($"Reassembling Subsets...");
-            y = Helper.ReassembleSubsets(dctY);
-            cb = Helper.ReassembleSubsets(dctCb);
-            cr = Helper.ReassembleSubsets(dctCr);
-            dctY = null;
-            dctCb = null;
-            dctCr = null;
+            var y = Helper.ReassembleSubsets(ySubset);
+            var cb = Helper.ReassembleSubsets(cbSubset);
+            var cr = Helper.ReassembleSubsets(crSubset);
             //Unpad
-            Debug.WriteLine($"Unpadding...");
-            y = Unpad(y, yRow, yCol);
-            cb = Unpad(cb, cbRow, cbCol);
-            cr = Unpad(cr, crRow, crCol);
+            y = Unpad(y, yPadW, yPadH);
+            cb = Unpad(cb, cPadW, cPadH);
+            cr = Unpad(cr, cPadW, cPadH);
             //Unsample
-            Debug.WriteLine($"Unsampling...");
             cb = Unsample(cb);
             cr = Unsample(cr);
             //Combine channels
-            Debug.WriteLine($"Reconstructing YCBCR...");
-            YCbCrPixels = YCBCR.ReconstructYCBCR(y, cb, cr);
+            var ycbcrpixels = YCBCR.ReconstructYCBCR(y, cb, cr);
             //Writing to buffer
-            Debug.WriteLine($"Writing to Buffer...");
-            var buffer = Helper.MatrixToArray(YCBCR.YCBCRtoBuffer(YCbCrPixels));
-            YCbCrPixels = null;
-            WriteableBitmap bmp = new(img.Source as BitmapSource);
+            var rgbpixels = RGB.YCBCRtoRGB(ycbcrpixels);
+            var buffer2d = RGB.RGBtoBuffer(rgbpixels);
+            var buffer = Helper.MatrixToArray(buffer2d);
+            for (int i = 0; i < 4; ++i)
+            {
+                Debug.WriteLine(buffer[i]);
+            }
+            WriteableBitmap bmp = new(pixWidth, pixHeight, 96, 96,
+                PixelFormats.Bgra32,
+                null);
             bmp.WritePixels(
-                new System.Windows.Int32Rect(0, 0, src.PixelWidth, src.PixelHeight),
+                new System.Windows.Int32Rect(0, 0, pixWidth, pixHeight),
                 buffer,
-                src.PixelWidth * src.Format.BitsPerPixel / 8,
+                (pixWidth * bpx + 7) / 8,
                 0);
-            img.Source = bmp;
-            bench.Stop();
-            Debug.WriteLine($"Finished: {bench.ElapsedMilliseconds} ms");
-            GC.Collect();
+            return bmp;
         }
 
         public static byte[] MogarithmRunner(List<List<float[,]>> subsets)
@@ -173,6 +244,7 @@ namespace ImageCompression
             return ret.ToArray();
         }
 
+        //BIG PROBLEM
         public static List<List<float[,]>> Demogarithmizer(byte[] channel, int width, int height)
         {
             List<float[,]> temp = new();
@@ -197,12 +269,18 @@ namespace ImageCompression
                 ret.Add(new List<float[,]>());
                 for (int j = 0; j < width; ++j)
                 {
-                    ret[i].Add(new float[0, 0]);
-                    ret[i][j] = temp[j * width + i];
+                    ret[i].Add(temp[i * width + j]);
                 }
             }
             return ret;
         }
+
+
+
+        /*public static List<List<float[,]>> Demogarizer(byte[] channel, int width, int height)
+        {
+
+        }*/
 
         public static float[,] Unsample(float[,] arr)
         {
@@ -257,7 +335,7 @@ namespace ImageCompression
             return ret;
         }
 
-        private List<List<float[,]>> QuantizeY(List<List<float[,]>> y)
+        private static List<List<float[,]>> QuantizeY(List<List<float[,]>> y)
         {
             List<List<float[,]>> ret = new();
             for (int i = 0; i < y.Count; ++i)
@@ -272,7 +350,7 @@ namespace ImageCompression
             return ret;
         }
 
-        private List<List<float[,]>> QuantizeC(List<List<float[,]>> c)
+        private static List<List<float[,]>> QuantizeC(List<List<float[,]>> c)
         {
             List<List<float[,]>> ret = new();
             for (int i = 0; i < c.Count; ++i)
@@ -287,7 +365,7 @@ namespace ImageCompression
             return ret;
         }
 
-        private List<List<float[,]>> DeQuantizeY(List<List<float[,]>> y)
+        private static List<List<float[,]>> DeQuantizeY(List<List<float[,]>> y)
         {
             List<List<float[,]>> ret = new();
             for (int i = 0; i < y.Count; ++i)
@@ -302,7 +380,7 @@ namespace ImageCompression
             return ret;
         }
 
-        private List<List<float[,]>> DeQuantizeC(List<List<float[,]>> c)
+        private static List<List<float[,]>> DeQuantizeC(List<List<float[,]>> c)
         {
             List<List<float[,]>> ret = new();
             for (int i = 0; i < c.Count; ++i)
@@ -379,7 +457,7 @@ namespace ImageCompression
             return ret;
         }
 
-        private List<List<float[,]>> IDCTNonThreadedRunnerSquared(List<List<float[,]>> img)
+        private static List<List<float[,]>> IDCTNonThreadedRunnerSquared(List<List<float[,]>> img)
         {
             List<List<float[,]>> ret = new();
             foreach (var list in img)
@@ -389,7 +467,7 @@ namespace ImageCompression
             return ret;
         }
 
-        private List<float[,]> IDCTNonThreadedRunner(List<float[,]> img)
+        private static List<float[,]> IDCTNonThreadedRunner(List<float[,]> img)
         {
             List<float[,]> ret = new();
             foreach (var subset in img)
@@ -399,7 +477,7 @@ namespace ImageCompression
             return ret;
         }
 
-        private List<List<float[,]>> IDCTRunnerSquared(List<List<float[,]>> img)
+        private static List<List<float[,]>> IDCTRunnerSquared(List<List<float[,]>> img)
         {
             List<List<float[,]>> returnable = new();
             foreach (var subset in img)
@@ -409,7 +487,7 @@ namespace ImageCompression
             return returnable;
         }
 
-        private List<float[,]> IDCTRunner(List<float[,]> img)
+        private static List<float[,]> IDCTRunner(List<float[,]> img)
         {
             int tasks = img.Count() / Constants.MAX_THREADS;
             List<float[,]> result = new();

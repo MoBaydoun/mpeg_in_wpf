@@ -34,6 +34,20 @@ namespace ImageCompression
             Debug.WriteLine(s);
         }
 
+        public static List<List<T[,]>> ConvertJaggedMatrixToList<T>(T[,][,] arr)
+        {
+            List<List<T[,]>> ret = new();
+            for (int i = 0; i < arr.GetLength(0); ++i)
+            {
+                ret.Add(new List<T[,]>());
+                for (int j = 0; j < arr.GetLength(1); ++j)
+                {
+                    ret[i].Add(arr[i, j]);
+                }
+            }
+            return ret;
+        }
+
         public static float[,] ConvertByteMatrixToFloat(byte[,] arr)
         {
             float[,] ret = new float[arr.GetLength(0), arr.GetLength(1)];
@@ -141,7 +155,7 @@ namespace ImageCompression
                 {s[14], s[16], s[25], s[31], s[39], s[46], s[50], s[57]},
                 {s[15], s[26], s[30], s[40], s[45], s[51], s[56], s[58]},
                 {s[27], s[29], s[41], s[44], s[52], s[55], s[59], s[62]},
-                {s[29], s[42], s[43], s[53], s[54], s[60], s[61], s[63]}
+                {s[28], s[42], s[43], s[53], s[54], s[60], s[61], s[63]}
             };
         }
 
@@ -237,8 +251,8 @@ namespace ImageCompression
 
         public static void SaveWidthHeight<T>(List<List<T[,]>> subsets, out int width, out int height)
         {
-            width = subsets.Count;
-            height = subsets[0].Count;
+            height = subsets.Count;
+            width = subsets[0].Count;
         }
 
         public static byte[] MRLE(byte[] b)
