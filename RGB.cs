@@ -64,6 +64,7 @@ namespace ImageCompression
                     converted[i, j] = (byte)Math.Clamp(pixels[i, j / 4].R, 0, 255);
                     converted[i, j + 1] = (byte)Math.Clamp(pixels[i, j / 4].G, 0, 255);
                     converted[i, j + 2] = (byte)Math.Clamp(pixels[i, j / 4].B, 0, 255);
+                    converted[i, j + 3] = 255;
                 }
             }
             return converted;
