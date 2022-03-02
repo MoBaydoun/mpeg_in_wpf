@@ -216,10 +216,6 @@ namespace ImageCompression
             var rgbpixels = RGB.YCBCRtoRGB(ycbcrpixels);
             var buffer2d = RGB.RGBtoBuffer(rgbpixels);
             var buffer = Helper.MatrixToArray(buffer2d);
-            for (int i = 0; i < 4; ++i)
-            {
-                Debug.WriteLine(buffer[i]);
-            }
             WriteableBitmap bmp = new(pixWidth, pixHeight, 96, 96,
                 PixelFormats.Bgra32,
                 null);
