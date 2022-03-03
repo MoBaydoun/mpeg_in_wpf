@@ -7,10 +7,20 @@
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
     <Grid Background="#FF3A3333">
-        <Canvas x:Name="ImageLoader" Background="Transparent" MouseUp="LoadImage">
-            <Image x:Name="Compressee"></Image>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+        </Grid.ColumnDefinitions>
+        <StackPanel Orientation="Horizontal">
+            <Button Content="compress" VerticalAlignment="Top" Click="Compress" Width="100"/>
+            <Button Content="uncompress" VerticalAlignment="Top" Click="OpenCompressed" Width="100"/>
+            <Button Content="motion vector" VerticalAlignment="Top" Click="MotionVectors" Width="100"/>
+        </StackPanel>
+        <Canvas Grid.Column="0" x:Name="ImageLoader" Background="Transparent" Margin="0 20 20 0" MouseUp="LoadImage">
+            <Image x:Name="Compressee"/>
         </Canvas>
-        <Button Content="Do Something" HorizontalAlignment="Left" Margin="10,17,0,0" VerticalAlignment="Top" Click="Compress"/>
-        <Button Content="Button" Margin="6,75,710,319" Click="OpenCompressed"/>
+        <Canvas Grid.Column="1" x:Name="SourceLoader" Background="Transparent" Margin="20 20 0 0" MouseUp="LoadSource">
+            <Image x:Name="Source"/>
+        </Canvas>
     </Grid>
 </Window>

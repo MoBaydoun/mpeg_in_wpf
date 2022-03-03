@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Threading.Tasks;
 using Microsoft.Win32;
 using System.IO;
+using Line = System.Windows.Shapes.Line;
 
 namespace ImageCompression
 {
@@ -66,6 +67,55 @@ namespace ImageCompression
             SaveJPEG(compressed, src.PixelWidth, src.PixelHeight, (byte)src.Format.BitsPerPixel,
                 yBytes.Length, cbBytes.Length, (byte)yRow, (byte)yCol, (byte)cbRow, (byte)cbCol,
                 rowAdj, colAdj, yWidth, yHeight, cbWidth, cbHeight);
+        }
+
+        public static float[,] DrawPoints(Image img, Canvas c)
+        {
+            var src = img.Source as BitmapSource ?? throw new ArgumentNullException("Image does not exist");
+            var image = ConvertData(src);
+            //Bytes to RGB
+            var rgbpixels = RGB.MatrixBufferToRGB(image);
+            //RGB to YCbCr
+            var ycbcrpixels = YCBCR.RGBMatrixToYCBCRMatrix(rgbpixels);
+            //Seperate channels
+            YCBCR.DeconstructYCBCR(ycbcrpixels, out float[,] y, out float[,] cb, out float[,] cr);
+            List<Point> points = new List<Point>();
+            for (int i = 0; i < y.GetLength(0); i += 16)
+            {
+                for (int j = 0; j < y.GetLength(1); j += 16)
+                {
+                    points.Add(new Point(i, j));
+                }
+            }
+            for (int i = 0; i < points.Count; ++i)
+            {
+                Line l = new();
+                l.X1 = points[i].x;
+                l.X2 = points[i].x + 1;
+                l.Y1 = points[i].y;
+                l.Y2 = points[i].y + 1;
+                l.Stroke = Brushes.Green;
+                l.StrokeThickness = 1;
+                c.Children.Add(l);
+            }
+            return y;
+        }
+
+        public static void DoTheThing(float[,] target, float[,] source, List<Line> l)
+        {
+            List<Point> p = new();
+            for (int x = 0; x < target.GetLength(0); x += Constants.BLOCKS)
+            {
+                for (int y = 0; y < target.GetLength(1); y += Constants.BLOCKS)
+                {
+                    p.Add(MoVector.SeqSearch(target, source, x, y));
+                }
+            }
+            for (int i = 0; i < l.Count; ++i)
+            {
+                l[i].X2 = l[i].X1 + p[i].x;
+                l[i].Y2 = l[i].Y1 + p[i].y;
+            }
         }
 
         public static void SaveJPEG(byte[] compressed,
@@ -244,7 +294,6 @@ namespace ImageCompression
             return ret.ToArray();
         }
 
-        //BIG PROBLEM
         public static List<List<float[,]>> Demogarithmizer(byte[] channel, int width, int height)
         {
             List<float[,]> temp = new();
@@ -274,13 +323,6 @@ namespace ImageCompression
             }
             return ret;
         }
-
-
-
-        /*public static List<List<float[,]>> Demogarizer(byte[] channel, int width, int height)
-        {
-
-        }*/
 
         public static float[,] Unsample(float[,] arr)
         {

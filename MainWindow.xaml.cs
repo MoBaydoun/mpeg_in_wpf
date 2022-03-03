@@ -5,6 +5,8 @@ using Microsoft.Win32;
 using System.Windows.Media.Imaging;
 using System;
 using System.Collections.Generic;
+using Line = System.Windows.Shapes.Line;
+using System.Linq;
 
 namespace ImageCompression
 {
@@ -36,8 +38,6 @@ namespace ImageCompression
             if (ofd.ShowDialog() == true)
             {
                 Compressee.Source = new BitmapImage(new Uri(ofd.FileName));
-                Compressee.Width = Width;
-                Compressee.Height = Height;
                 /*Compressee.Width = Constants.IMAGE_SIZE;
                 Compressee.Height = Constants.IMAGE_SIZE;
                 BitmapSource src = Compressee.Source as BitmapSource ?? throw new ArgumentException("No Image Provided");
@@ -48,6 +48,26 @@ namespace ImageCompression
             ImageLoader.MouseUp -= LoadImage;
         }
 
+        private void LoadSource(object sender, MouseButtonEventArgs e)
+        {
+            OpenFileDialog ofd = new()
+            {
+                Title = "Select an Image NOW",
+                Filter = "Raw Image Files (*.ARW) | *.ARW; *.png; *.jpg; *.jpeg; *.bmp"
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                Source.Source = new BitmapImage(new Uri(ofd.FileName));
+                /*Compressee.Width = Constants.IMAGE_SIZE;
+                Compressee.Height = Constants.IMAGE_SIZE;
+                BitmapSource src = Compressee.Source as BitmapSource ?? throw new ArgumentException("No Image Provided");
+                float scaleX = (float)Constants.IMAGE_SIZE / src.PixelWidth;
+                float scaleY = (float)Constants.IMAGE_SIZE / src.PixelHeight;
+                Compressee.Source = new TransformedBitmap(src, new ScaleTransform(scaleX, scaleY));*/
+            }
+            Source.MouseUp -= LoadSource;
+        }
+
         private void Compress(object sender, RoutedEventArgs e)
         {
             new Compression(Compressee);
@@ -56,9 +76,14 @@ namespace ImageCompression
         private void OpenCompressed(object sender, RoutedEventArgs e)
         {
             Compressee.Source = Compression.OpenCompressed();
-            Compressee.Width = Width;
-            Compressee.Height = Height;
-            Debug.WriteLine($"Uncompressed");
+        }
+
+        private void MotionVectors(object sender, RoutedEventArgs e)
+        {
+            var target = Compression.DrawPoints(Compressee, ImageLoader);
+            var source = Compression.DrawPoints(Source, SourceLoader);
+            var list = ImageLoader.Children.OfType<Line>().ToList();
+            Compression.DoTheThing(target, source, list);
         }
     }
 }
