@@ -8,7 +8,7 @@ namespace ImageCompression
         public const int MATRIX_SIZE = 8;
         public const int IMAGE_SIZE = 400;
         public const int KEY = 0;
-        public const int BLOCKS = 16;
+        public const int BLOCKS = 8;
         public const int P = 50;
         public static readonly Vector3 LUMINOSITY = new(0.299f, 0.587f, 0.114f);
         public static readonly Vector3 BLUE_DIFF = new(0.168736f, 0.331264f, 0.5f);

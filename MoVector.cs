@@ -40,7 +40,7 @@ namespace ImageCompression
         public static Point SeqSearch(float[,] target, float[,] source, int x, int y)
         {
             float min = MAD(target, source, x, y, 0, 0);
-            if (min == 0) return new Point(0, 0);
+            if (min == 0) return new Point(1, 1);
             int u = 0;
             int v = 0;
             for (int i = -Constants.P; i < Constants.P; ++i)

@@ -38,12 +38,6 @@ namespace ImageCompression
             if (ofd.ShowDialog() == true)
             {
                 Compressee.Source = new BitmapImage(new Uri(ofd.FileName));
-                /*Compressee.Width = Constants.IMAGE_SIZE;
-                Compressee.Height = Constants.IMAGE_SIZE;
-                BitmapSource src = Compressee.Source as BitmapSource ?? throw new ArgumentException("No Image Provided");
-                float scaleX = (float)Constants.IMAGE_SIZE / src.PixelWidth;
-                float scaleY = (float)Constants.IMAGE_SIZE / src.PixelHeight;
-                Compressee.Source = new TransformedBitmap(src, new ScaleTransform(scaleX, scaleY));*/
             }
             ImageLoader.MouseUp -= LoadImage;
         }
@@ -58,12 +52,6 @@ namespace ImageCompression
             if (ofd.ShowDialog() == true)
             {
                 Source.Source = new BitmapImage(new Uri(ofd.FileName));
-                /*Compressee.Width = Constants.IMAGE_SIZE;
-                Compressee.Height = Constants.IMAGE_SIZE;
-                BitmapSource src = Compressee.Source as BitmapSource ?? throw new ArgumentException("No Image Provided");
-                float scaleX = (float)Constants.IMAGE_SIZE / src.PixelWidth;
-                float scaleY = (float)Constants.IMAGE_SIZE / src.PixelHeight;
-                Compressee.Source = new TransformedBitmap(src, new ScaleTransform(scaleX, scaleY));*/
             }
             Source.MouseUp -= LoadSource;
         }
@@ -76,6 +64,8 @@ namespace ImageCompression
         private void OpenCompressed(object sender, RoutedEventArgs e)
         {
             Compressee.Source = Compression.OpenCompressed();
+            Compressee.Width = Width / 2;
+            Compressee.Height = Height;
         }
 
         private void MotionVectors(object sender, RoutedEventArgs e)

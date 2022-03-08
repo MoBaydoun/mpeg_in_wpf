@@ -16,7 +16,7 @@ namespace ImageCompression
     {
         public Compression(Image img)
         {
-            
+
             //Construct stuff from source
             Debug.WriteLine($"Constructing Data...");
             var src = img.Source as BitmapSource ?? throw new ArgumentNullException("Image does not exist");
@@ -80,9 +80,9 @@ namespace ImageCompression
             //Seperate channels
             YCBCR.DeconstructYCBCR(ycbcrpixels, out float[,] y, out float[,] cb, out float[,] cr);
             List<Point> points = new List<Point>();
-            for (int i = 0; i < y.GetLength(0); i += 16)
+            for (int i = 0; i < y.GetLength(0); i += Constants.BLOCKS)
             {
-                for (int j = 0; j < y.GetLength(1); j += 16)
+                for (int j = 0; j < y.GetLength(1); j += Constants.BLOCKS)
                 {
                     points.Add(new Point(i, j));
                 }
@@ -160,7 +160,8 @@ namespace ImageCompression
                 Debug.WriteLine($"C Subsets (W): {cWidth}");
                 Debug.WriteLine($"C Subsets (H): {cHeight}");
                 Debug.WriteLine($"Compressed Length: {compressed.Length}");
-            } else
+            }
+            else
             {
                 Debug.WriteLine($"Saving File Failed...");
             }
@@ -343,8 +344,8 @@ namespace ImageCompression
         public static float[,] Unpad(float[,] arr, int rowDivis, int colDivis)
         {
             if (rowDivis == 0 && colDivis == 0) return arr;
-            int row = (arr.GetLength(0) - rowDivis) % 2 == 0 ? arr.GetLength(0) - rowDivis : arr.GetLength(0) - rowDivis + 1; 
-            int col = (arr.GetLength(1) - colDivis) % 2 == 0 ? arr.GetLength(1) - colDivis : arr.GetLength(1) - colDivis + 1; 
+            int row = (arr.GetLength(0) - rowDivis) % 2 == 0 ? arr.GetLength(0) - rowDivis : arr.GetLength(0) - rowDivis + 1;
+            int col = (arr.GetLength(1) - colDivis) % 2 == 0 ? arr.GetLength(1) - colDivis : arr.GetLength(1) - colDivis + 1;
             float[,] ret = new float[row, col];
             for (int i = 0; i < ret.GetLength(0); ++i)
             {
