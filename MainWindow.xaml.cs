@@ -38,6 +38,8 @@ namespace ImageCompression
             if (ofd.ShowDialog() == true)
             {
                 Compressee.Source = new BitmapImage(new Uri(ofd.FileName));
+                Compressee.Width = ImageLoader.Width;
+                Compressee.Height = ImageLoader.Height;
             }
             ImageLoader.MouseUp -= LoadImage;
         }
@@ -52,6 +54,8 @@ namespace ImageCompression
             if (ofd.ShowDialog() == true)
             {
                 Source.Source = new BitmapImage(new Uri(ofd.FileName));
+                Source.Width = SourceLoader.Width;
+                Source.Height = SourceLoader.Height;
             }
             Source.MouseUp -= LoadSource;
         }
@@ -70,10 +74,7 @@ namespace ImageCompression
 
         private void MotionVectors(object sender, RoutedEventArgs e)
         {
-            var target = Compression.DrawPoints(Compressee, ImageLoader);
-            var source = Compression.DrawPoints(Source, SourceLoader);
-            var list = ImageLoader.Children.OfType<Line>().ToList();
-            Compression.DoTheThing(target, source, list);
+            Compression.Mpegger(Compressee, ImageLoader, Source, SourceLoader);
         }
     }
 }

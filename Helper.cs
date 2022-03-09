@@ -212,19 +212,14 @@ namespace ImageCompression
             return subsets;
         }
 
-        private static T[,] GetSubset<T>(T[,] img, int offsetX, int offsetY)
+        public static T[,] GetSubset<T>(T[,] img, int offsetX, int offsetY)
         {
             T[,] subset = new T[Constants.MATRIX_SIZE, Constants.MATRIX_SIZE];
             for (int i = 0; i < subset.GetLength(0); ++i)
             {
                 for (int j = 0; j < subset.GetLength(1); ++j)
                 {
-                    int adjusterX = img.GetLength(0) - offsetX + i;
-                    int adjusterY = img.GetLength(1) - offsetY + j;
-                    subset[i, j] = img[
-                        offsetX + i < img.GetLength(0) ? offsetX + i : img.GetLength(0) - adjusterX,
-                        offsetY + j < img.GetLength(1) ? offsetY + j : img.GetLength(1) - adjusterY
-                        ];
+                    subset[i, j] = img[offsetX + i, offsetY + j];
                 }
             }
             return subset;
@@ -247,6 +242,34 @@ namespace ImageCompression
                 }
             }
             return img;
+        }
+
+        public static float[,] SubtractMatrix(float[,] m1, float[,] m2)
+        {
+            Debug.Assert(m1.GetLength(0) == m2.GetLength(0) && m1.GetLength(1) == m2.GetLength(1));
+            float[,] ret = new float[m1.GetLength(0), m2.GetLength(1)];
+            for (int i = 0; i < m1.GetLength(0); ++i)
+            {
+                for (int j = 0; j < m2.GetLength(1); ++j)
+                {
+                    ret[i, j] = m1[i, j] - m2[i, j];
+                }
+            }
+            return ret;
+        }
+
+        public static float[,] AddMatrix(float[,] m1, float[,] m2)
+        {
+            Debug.Assert(m1.GetLength(0) == m2.GetLength(0) && m1.GetLength(1) == m2.GetLength(1));
+            float[,] ret = new float[m1.GetLength(0), m2.GetLength(1)];
+            for (int i = 0; i < m1.GetLength(0); ++i)
+            {
+                for (int j = 0; j < m2.GetLength(1); ++j)
+                {
+                    ret[i, j] = m1[i, j] + m2[i, j];
+                }
+            }
+            return ret;
         }
 
         public static void SaveWidthHeight<T>(List<List<T[,]>> subsets, out int width, out int height)

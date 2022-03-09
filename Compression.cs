@@ -69,20 +69,28 @@ namespace ImageCompression
                 rowAdj, colAdj, yWidth, yHeight, cbWidth, cbHeight);
         }
 
-        public static float[,] DrawPoints(Image img, Canvas c)
+        public static void Mpegger(Image img1, Canvas c1, Image img2, Canvas c2)
         {
-            var src = img.Source as BitmapSource ?? throw new ArgumentNullException("Image does not exist");
-            var image = ConvertData(src);
+            Debug.Assert(img1 != null && img2 != null);
+            var src1 = img1.Source as BitmapSource ?? throw new ArgumentNullException("Image does not exist");
+            var image1 = ConvertData(src1);
             //Bytes to RGB
-            var rgbpixels = RGB.MatrixBufferToRGB(image);
+            var rgbpixels1 = RGB.MatrixBufferToRGB(image1);
             //RGB to YCbCr
-            var ycbcrpixels = YCBCR.RGBMatrixToYCBCRMatrix(rgbpixels);
+            var ycbcrpixels1 = YCBCR.RGBMatrixToYCBCRMatrix(rgbpixels1);
             //Seperate channels
-            YCBCR.DeconstructYCBCR(ycbcrpixels, out float[,] y, out float[,] cb, out float[,] cr);
+            YCBCR.DeconstructYCBCR(ycbcrpixels1, out float[,] y1, out float[,] cb1, out float[,] cr1);
+
+            var src2 = img2.Source as BitmapSource ?? throw new ArgumentNullException("Literally impossible to be null");
+            var image2 = ConvertData(src2);
+            var rgbpixels2 = RGB.MatrixBufferToRGB(image2);
+            var ycbcrpixels2 = YCBCR.RGBMatrixToYCBCRMatrix(rgbpixels2);
+            YCBCR.DeconstructYCBCR(ycbcrpixels2, out float[,] y2, out float[,] cb2, out float[,] cr2);
+
             List<Point> points = new List<Point>();
-            for (int i = 0; i < y.GetLength(0); i += Constants.BLOCKS)
+            for (int i = 0; i < y1.GetLength(0); i += Constants.BLOCKS)
             {
-                for (int j = 0; j < y.GetLength(1); j += Constants.BLOCKS)
+                for (int j = 0; j < y1.GetLength(1); j += Constants.BLOCKS)
                 {
                     points.Add(new Point(i, j));
                 }
@@ -94,28 +102,98 @@ namespace ImageCompression
                 l.X2 = points[i].x + 1;
                 l.Y1 = points[i].y;
                 l.Y2 = points[i].y + 1;
-                l.Stroke = Brushes.Green;
+                l.Stroke = Brushes.Red;
                 l.StrokeThickness = 1;
-                c.Children.Add(l);
+                c1.Children.Add(l);
             }
-            return y;
+            var tester = y1;
+            var list = c1.Children.OfType<Line>().ToList();
+            var yPoints = GetMotionVectors(y1, y2, list);
+            var cbPoints = GetMotionVectors(cb1, cb2, list);
+            var crPoints = GetMotionVectors(cr1, cr2, list);
+
+            var yDiffs = GetDifferenceBlox(y2, y1, yPoints);
+            var cbDiffs = GetDifferenceBlox(cb2, cb1, cbPoints);
+            var crDiffs = GetDifferenceBlox(cr2, cr1, crPoints);
+
+            y1 = ReassembleFromDifference(yDiffs, y1, yPoints);
+            cb1 = ReassembleFromDifference(cbDiffs, cb1, cbPoints);
+            cr1 = ReassembleFromDifference(crDiffs, cr1, crPoints);
+
+            var reconstructedpixels = YCBCR.ReconstructYCBCR(y1, cb1, cr1);
+            var rgbreconstruct = RGB.YCBCRtoRGB(reconstructedpixels);
+
+            var buffer = Helper.MatrixToArray(RGB.RGBtoBuffer(rgbreconstruct));
+
+            WriteableBitmap bmp = new(src1.PixelWidth, src1.PixelHeight, 96, 96,
+                PixelFormats.Bgra32,
+                null);
+            bmp.WritePixels(
+                new(0, 0, src1.PixelWidth, src1.PixelHeight),
+                buffer,
+                src1.PixelWidth * src1.Format.BitsPerPixel / 8,
+                0);
+            img2.Source = bmp;
+
         }
 
-        public static void DoTheThing(float[,] target, float[,] source, List<Line> l)
+        public static float[,] ReassembleFromDifference(List<List<float[,]>> diffblocks, float[,] references, List<Point> vectors)
+        {
+            List<List<float[,]>> result = new();
+            var reference = Helper.CreateSubsets(references);
+            var mvectors = Helper.ArrayToMatrix(vectors.ToArray(), references.GetLength(0) / Constants.BLOCKS);
+            for (int i = 0; i < reference.Count; ++i)
+            {
+                result.Add(new List<float[,]>());
+                for (int j = 0; j < reference[i].Count; ++j)
+                {
+                    result[i].Add(Helper.AddMatrix(diffblocks[i][j]
+                        , reference[i + mvectors[i, j].x / Constants.BLOCKS][j + mvectors[i, j].y / Constants.BLOCKS]));
+                }
+            }
+
+            return Helper.ReassembleSubsets(result);
+        }
+
+        public static List<Point> GetMotionVectors(float[,] target, float[,] reference, List<Line> l)
         {
             List<Point> p = new();
             for (int x = 0; x < target.GetLength(0); x += Constants.BLOCKS)
             {
                 for (int y = 0; y < target.GetLength(1); y += Constants.BLOCKS)
                 {
-                    p.Add(MoVector.SeqSearch(target, source, x, y));
+                    p.Add(MoVector.SeqSearch(reference, target, y, x));
                 }
             }
             for (int i = 0; i < l.Count; ++i)
             {
-                l[i].X2 = l[i].X1 + p[i].x;
-                l[i].Y2 = l[i].Y1 + p[i].y;
+                //Debug.WriteIf(p[i].x < 0 || p[i].y < 0, $"Uh oh negative: ({p[i].x}, {p[i].y})\n");
+                l[i].X1 = l[i].X1 + p[i].y;
+                l[i].Y1 = l[i].Y1 + p[i].x;
             }
+            return p;
+        }
+
+        public static List<List<float[,]>> GetDifferenceBlox(float[,] target, float[,] reference, List<Point> vectors)
+        {
+            var targetsubsets = Helper.CreateSubsets(target);
+            var refersubsets = Helper.CreateSubsets(reference);
+            List<List<float[,]>> diffblocks = new();
+            var mvectors = Helper.ArrayToMatrix(vectors.ToArray(), target.GetLength(0) / Constants.BLOCKS);
+            for (int i = 0; i < targetsubsets.Count; ++i)
+            {
+                diffblocks.Add(new List<float[,]>());
+                for (int j = 0; j < targetsubsets[i].Count; ++j)
+                {
+                    diffblocks[i].Add(
+                        Helper.SubtractMatrix(
+                            targetsubsets[i][j],
+                            refersubsets[i + mvectors[i, j].x / Constants.BLOCKS][j + mvectors[i, j].y / Constants.BLOCKS]
+                            )
+                        );
+                }
+            }
+            return diffblocks;
         }
 
         public static void SaveJPEG(byte[] compressed,
